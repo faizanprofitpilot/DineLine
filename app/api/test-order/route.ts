@@ -31,16 +31,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user owns the restaurant and get kitchen emails
-    const { data: restaurant, error: restaurantError } = await supabase
+    const { data: restaurantData, error: restaurantError } = await supabase
       .from('restaurants')
       .select('id, name, kitchen_emails')
       .eq('id', restaurantId)
       .eq('owner_user_id', user.id)
       .single();
 
-    if (restaurantError || !restaurant) {
+    if (restaurantError || !restaurantData) {
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
+
+    const restaurant = restaurantData as any;
 
     // Create a test order
     const serviceClient = createServiceClient();
