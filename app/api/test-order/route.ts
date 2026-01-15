@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/clients/supabase';
 import { createServerClient } from '@/lib/clients/supabase';
+import { sendKitchenTicket } from '@/lib/clients/resend';
+import { OrderData } from '@/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -28,10 +30,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing restaurantId' }, { status: 400 });
     }
 
-    // Verify user owns the restaurant
+    // Verify user owns the restaurant and get kitchen emails
     const { data: restaurant, error: restaurantError } = await supabase
       .from('restaurants')
-      .select('id, name')
+      .select('id, name, kitchen_emails')
       .eq('id', restaurantId)
       .eq('owner_user_id', user.id)
       .single();
@@ -90,10 +92,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const order = newOrder as any;
+
+    // Send kitchen ticket email if kitchen emails are configured
+    if (restaurant.kitchen_emails && restaurant.kitchen_emails.length > 0) {
+      try {
+        const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL 
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/orders/${order.id}`
+          : undefined;
+
+        const orderData: OrderData = {
+          customer_name: 'Test Customer',
+          customer_phone: '+15551234567',
+          order_type: 'pickup',
+          requested_time: 'ASAP',
+          items: [
+            { name: 'Margherita Pizza', qty: 1 },
+            { name: 'Caesar Salad', qty: 2 },
+          ],
+          special_instructions: 'This is a test order created for demonstration purposes.',
+          intent: 'order',
+        };
+
+        await sendKitchenTicket(
+          restaurant.kitchen_emails,
+          restaurant.name,
+          order,
+          orderData,
+          'Test order transcript - this is a demo order.',
+          null, // No recording for test orders
+          dashboardUrl
+        );
+        console.log('[Test Order] ✅ Kitchen ticket email sent');
+      } catch (error) {
+        console.error('[Test Order] Kitchen ticket email failed:', error);
+        // Don't fail the request if email fails - order is still created
+      }
+    } else {
+      console.log('[Test Order] No kitchen emails configured, skipping email');
+    }
+
     return NextResponse.json({
       success: true,
       order: newOrder,
       message: 'Test order created successfully',
+      emailSent: restaurant.kitchen_emails && restaurant.kitchen_emails.length > 0,
     });
   } catch (error) {
     console.error('[Test Order] Unexpected error:', error);

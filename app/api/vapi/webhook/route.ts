@@ -760,13 +760,25 @@ export async function POST(req: NextRequest) {
 
       const order = newOrder as any;
       console.log('[Vapi Webhook] ✅ Order created successfully:', order.id);
+      console.log('[Vapi Webhook] Restaurant kitchen emails:', restaurant.kitchen_emails);
+      console.log('[Vapi Webhook] Kitchen emails count:', restaurant.kitchen_emails?.length || 0);
 
-      // Send kitchen ticket email
-      if (restaurant.kitchen_emails && restaurant.kitchen_emails.length > 0) {
+      // Send kitchen ticket email - CRITICAL: Always send if kitchen emails are configured
+      if (restaurant.kitchen_emails && Array.isArray(restaurant.kitchen_emails) && restaurant.kitchen_emails.length > 0) {
+        console.log('[Vapi Webhook] Attempting to send kitchen ticket email to:', restaurant.kitchen_emails);
         try {
           const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL 
             ? `${process.env.NEXT_PUBLIC_APP_URL}/orders/${order.id}`
             : undefined;
+
+          console.log('[Vapi Webhook] Calling sendKitchenTicket with:', {
+            to: restaurant.kitchen_emails,
+            restaurantName: restaurant.name,
+            orderId: order.id,
+            hasTranscript: !!finalTranscript,
+            hasRecording: !!finalRecordingUrl,
+            dashboardUrl,
+          });
 
           await sendKitchenTicket(
             restaurant.kitchen_emails,
@@ -777,13 +789,26 @@ export async function POST(req: NextRequest) {
             finalRecordingUrl || null,
             dashboardUrl
           );
-          console.log('[Vapi Webhook] ✅ Kitchen ticket email sent');
+          console.log('[Vapi Webhook] ✅ Kitchen ticket email sent successfully to:', restaurant.kitchen_emails);
         } catch (error) {
-          console.error('[Vapi Webhook] Kitchen ticket email failed:', error);
+          console.error('[Vapi Webhook] ❌ Kitchen ticket email failed:', error);
+          console.error('[Vapi Webhook] Email error details:', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            to: restaurant.kitchen_emails,
+            restaurantName: restaurant.name,
+          });
           // Don't fail the request if email fails - order is still created
         }
       } else {
-        console.log('[Vapi Webhook] No kitchen emails configured, skipping email');
+        console.warn('[Vapi Webhook] ⚠️ No kitchen emails configured or empty array. Kitchen emails:', restaurant.kitchen_emails);
+        console.warn('[Vapi Webhook] Restaurant data:', {
+          id: restaurant.id,
+          name: restaurant.name,
+          hasKitchenEmails: !!restaurant.kitchen_emails,
+          kitchenEmailsType: typeof restaurant.kitchen_emails,
+          kitchenEmailsValue: restaurant.kitchen_emails,
+        });
       }
     }
 
