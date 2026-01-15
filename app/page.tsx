@@ -148,13 +148,28 @@ function LandingPageContent() {
             Your restaurant never stops answering the phone.
           </h1>
           <p 
-            className={`text-lg sm:text-xl mb-10 leading-relaxed transition-all duration-1000 delay-200 ${
+            className={`text-lg sm:text-xl mb-6 leading-relaxed transition-all duration-1000 delay-200 ${
               isVisible['hero'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
             style={{ color: '#654321' }}
           >
             DineLine answers calls, takes orders, and sends clean kitchen tickets while your staff focuses on service.
           </p>
+          <div 
+            className={`mb-10 transition-all duration-1000 delay-300 ${
+              isVisible['hero'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+            }`}
+          >
+            <p className="text-sm mb-2" style={{ color: '#A0522D' }}>Try it now:</p>
+            <a
+              href="tel:+12405895335"
+              className="inline-block text-2xl sm:text-3xl font-medium transition-all duration-300 hover:[color:#654321] hover:scale-105 cursor-pointer"
+              style={{ color: '#8B4513' }}
+            >
+              +1 (240) 589-5335
+            </a>
+            <p className="text-xs mt-2" style={{ color: '#A0522D' }}>Call to experience our AI receptionist</p>
+          </div>
           <div 
             className={`transition-all duration-1000 delay-400 ${
               isVisible['hero'] ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
