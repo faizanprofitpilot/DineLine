@@ -265,14 +265,26 @@ export async function sendKitchenTicket(
   recordingUrl: string | null,
   dashboardUrl?: string // Optional: link to order in dashboard
 ) {
+  // CRITICAL: Determine if this is a reservation or order
+  // Check both intent and order_type - intent is the primary field
+  const isReservation = order.intent === 'reservation' || order.order_type === 'reservation';
+  
   const orderType = order.order_type === 'delivery' ? 'Delivery' : 
                     order.order_type === 'pickup' ? 'Pickup' : 
-                    order.order_type === 'reservation' ? 'Reservation' : 'Order';
+                    isReservation ? 'Reservation' : 'Order';
   
   // Subject line: Use "Reservation" for reservations, "Order" for orders
-  const subject = order.order_type === 'reservation' 
+  // Check both intent and order_type to ensure correct email type
+  const subject = isReservation
     ? `New Phone Reservation — ${restaurantName}`
     : `New Phone Order — ${restaurantName} — ${orderType}`;
+  
+  console.log('[Resend] Email type determination:', {
+    intent: order.intent,
+    order_type: order.order_type,
+    isReservation,
+    subject,
+  });
 
   // Palette (warm Toast-inspired)
   const colors = {

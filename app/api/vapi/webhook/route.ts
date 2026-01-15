@@ -675,6 +675,20 @@ export async function POST(req: NextRequest) {
       // Vapi structured data should match OrderData interface
       let orderData: OrderData = finalStructuredData || {};
       
+      // CRITICAL: Normalize intent and order_type to ensure consistency
+      // If intent is 'reservation', order_type must be 'reservation'
+      // If intent is 'order' and order_type is missing, default to 'pickup'
+      if (orderData.intent === 'reservation') {
+        orderData.order_type = 'reservation';
+      } else if (orderData.intent === 'order' && !orderData.order_type) {
+        orderData.order_type = 'pickup'; // Default to pickup if not specified
+      }
+      
+      console.log('[Vapi Webhook] Normalized orderData:', {
+        intent: orderData.intent,
+        order_type: orderData.order_type,
+      });
+      
       // CRITICAL FIX: If structured data is missing but we have a transcript, try to extract basic info
       // This handles cases where Vapi didn't extract structured data but the AI took the order/reservation
       if (!finalStructuredData && finalTranscript) {
