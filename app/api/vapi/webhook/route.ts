@@ -696,7 +696,7 @@ export async function POST(req: NextRequest) {
         // Create basic orderData from transcript
         orderData = {
           intent: isReservation ? 'reservation' : (isOrder ? 'order' : 'info'),
-          order_type: isReservation ? 'reservation' : (isOrder ? 'pickup' : null),
+          order_type: isReservation ? 'reservation' : (isOrder ? 'pickup' : undefined),
           customer_phone: finalCallerNumber || null,
         };
         
