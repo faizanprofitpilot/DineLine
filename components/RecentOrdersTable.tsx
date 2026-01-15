@@ -3,6 +3,7 @@
 import { Order } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 interface RecentOrdersTableProps {
   orders: Order[];
@@ -58,7 +59,7 @@ export default function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
                   className="border-b border-[#DEB887] hover:bg-[#FFF0C2] transition-colors cursor-pointer" 
                   onClick={() => handleRowClick(order.id)}
                 >
-                  <td className="px-6 py-4 text-sm" style={{ color: '#8B4513' }}>{order.customer_name || 'Unknown'}</td>
+                  <td className="px-6 py-4 text-sm" style={{ color: '#8B4513' }}>{getCustomerName(order)}</td>
                   <td className="px-6 py-4 text-sm" style={{ color: '#A0522D', opacity: 0.8 }}>
                     {new Date(order.created_at).toLocaleString()}
                   </td>

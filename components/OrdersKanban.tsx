@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Order } from '@/types';
 import { Clock, MapPin, Package } from 'lucide-react';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 interface OrdersKanbanProps {
   orders: Order[];
@@ -158,7 +159,7 @@ export default function OrdersKanban({ orders }: OrdersKanbanProps) {
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm mb-1" style={{ color: '#654321' }}>
-              {order.customer_name || 'Unknown Customer'}
+              {getCustomerName(order)}
             </p>
             <div className="flex items-center gap-2 text-xs" style={{ color: '#A0522D', opacity: 0.8 }}>
               <Clock className="h-3 w-3" />

@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Order } from '@/types';
 import Link from 'next/link';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 interface ReservationsCalendarProps {
   reservations: Order[];
@@ -280,7 +281,7 @@ export default function ReservationsCalendar({ reservations }: ReservationsCalen
                         }}
                       >
                         <div className="font-semibold truncate">
-                          {reservation.customer_name || 'Unknown'}
+                          {getCustomerName(reservation)}
                         </div>
                         <div className="text-xs opacity-75">{timeStr}</div>
                         {reservation.special_instructions && (

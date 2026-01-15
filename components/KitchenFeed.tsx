@@ -1,6 +1,7 @@
 'use client';
 
 import { Order } from '@/types';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 import { CheckCircle, ShoppingCart, Calendar, Clock } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,12 +31,12 @@ export default function KitchenFeed({ orders }: KitchenFeedProps) {
 
   const getEventDescription = (order: Order) => {
     if (order.status === 'completed') {
-      return `Order for ${order.customer_name || 'customer'} completed`;
+      return `Order for ${getCustomerName(order)} completed`;
     }
     if (order.intent === 'reservation') {
-      return `Reservation request from ${order.customer_name || 'customer'}`;
+      return `Reservation request from ${getCustomerName(order)}`;
     }
-    return `New order from ${order.customer_name || 'customer'}`;
+    return `New order from ${getCustomerName(order)}`;
   };
 
   const formatTime = (dateString: string | null) => {

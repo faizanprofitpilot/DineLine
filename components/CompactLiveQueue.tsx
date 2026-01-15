@@ -4,6 +4,7 @@ import { Order } from '@/types';
 import Link from 'next/link';
 import { Clock, ShoppingCart } from 'lucide-react';
 import EmptyState from './EmptyState';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 interface CompactLiveQueueProps {
   orders: Order[];
@@ -68,7 +69,7 @@ export default function CompactLiveQueue({ orders, restaurantId }: CompactLiveQu
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-semibold" style={{ color: '#654321' }}>
-                    {order.customer_name || 'Unknown Customer'}
+                    {getCustomerName(order)}
                   </span>
                   <span
                     className="px-2 py-0.5 rounded-full text-xs font-medium"

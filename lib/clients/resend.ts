@@ -310,7 +310,38 @@ export async function sendKitchenTicket(
       }).join('')
     : `<li style="padding: 6px 0; color: ${colors.muted};">No items specified</li>`;
 
-  const requestedTime = order.requested_time || orderData.requested_time || 'ASAP';
+  // Prioritize order.requested_time (from database), then orderData.requested_time (from webhook), then fallback to 'ASAP'
+  // Also check the transcript summary if available
+  let requestedTime = order.requested_time || orderData.requested_time;
+  
+  // If still missing, try to extract from transcript summary (ai_summary often contains the time)
+  if (!requestedTime && order.ai_summary) {
+    const summary = order.ai_summary;
+    // Look for time patterns in summary
+    const timePattern = /(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+    const dateTimePattern = /(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?\s+(?:at\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+    
+    const dateTimeMatch = summary.match(dateTimePattern);
+    if (dateTimeMatch) {
+      const month = dateTimeMatch[1];
+      const day = summary.match(new RegExp(`${month}\\s+(\\d{1,2})`, 'i'))?.[1];
+      const hour = dateTimeMatch[2];
+      const minute = dateTimeMatch[3] || '00';
+      const period = dateTimeMatch[4]?.toLowerCase();
+      requestedTime = `${month} ${day} at ${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+    } else {
+      const timeMatch = summary.match(timePattern);
+      if (timeMatch) {
+        const hour = timeMatch[1];
+        const minute = timeMatch[2] || '00';
+        const period = timeMatch[3]?.toLowerCase();
+        requestedTime = `${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+      }
+    }
+  }
+  
+  // Final fallback
+  requestedTime = requestedTime || 'ASAP';
   const deliveryBlock = order.order_type === 'delivery' && (order.delivery_address || orderData.delivery_address)
     ? `<div style="margin-top: 10px;">
         <div style="font-size: 12px; color: ${colors.muted}; text-transform: uppercase; letter-spacing: 0.04em;">Delivery Address</div>

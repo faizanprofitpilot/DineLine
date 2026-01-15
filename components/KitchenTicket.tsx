@@ -1,6 +1,7 @@
 'use client';
 
 import { Order } from '@/types';
+import { getCustomerName, getRequestedTime } from '@/lib/utils/extract-customer-info';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 
@@ -41,10 +42,10 @@ export default function KitchenTicket({ order, restaurantName }: KitchenTicketPr
   const kitchenTicketText = `${restaurantName}
 
 Order Type: ${order.order_type ? order.order_type.charAt(0).toUpperCase() + order.order_type.slice(1) : 'N/A'}
-Requested Time: ${order.requested_time || 'ASAP'}
+Requested Time: ${getRequestedTime(order)}
 
 Customer Information:
-  Name: ${order.customer_name || 'N/A'}
+  Name: ${getCustomerName(order)}
   Phone: ${order.customer_phone || 'N/A'}
 
 ${order.order_type === 'delivery' && order.delivery_address ? `Delivery Address:\n  ${order.delivery_address}\n` : ''}Items:

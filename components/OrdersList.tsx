@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Order, OrderStatus, OrderIntent, OrderType } from '@/types';
 import { Button } from '@/components/ui/button';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 interface OrdersListProps {
   orders: Order[];
@@ -206,7 +207,7 @@ export default function OrdersList({ orders, searchParams }: OrdersListProps) {
                       {formatDate(order.started_at)}
                     </td>
                     <td className="px-4 py-3 text-sm" style={{ color: '#8B4513' }}>
-                      {order.customer_name || 'Unknown'}
+                      {getCustomerName(order)}
                     </td>
                     <td className="px-4 py-3 text-sm capitalize" style={{ color: '#A0522D' }}>
                       {order.order_type || order.intent}

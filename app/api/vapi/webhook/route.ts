@@ -693,14 +693,137 @@ export async function POST(req: NextRequest) {
                        transcriptLower.includes('i want') ||
                        transcriptLower.includes('i\'d like');
         
+        // Extract requested_time from transcript
+        // Look for patterns like "7:30 PM", "January 7th at 7:30 PM", "Reservation time is set for 7:30 PM", etc.
+        let extractedRequestedTime: string | undefined = undefined;
+        
+        // Pattern 1: "January 7th at 7:30 PM" or "January 7 at 7:30 PM" (full date + time)
+        const dateTimePattern1 = /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\s+(?:at\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+        const match1 = finalTranscript.match(dateTimePattern1);
+        if (match1) {
+          const month = match1[1];
+          const day = match1[2];
+          const hour = match1[3];
+          const minute = match1[4] || '00';
+          const period = match1[5]?.toLowerCase();
+          extractedRequestedTime = `${month} ${day} at ${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+        }
+        
+        // Pattern 2: "Reservation time is set for 7:30 PM" or "time is 7:30 PM"
+        if (!extractedRequestedTime) {
+          const reservationTimePattern = /(?:reservation\s+)?time\s+(?:is\s+)?(?:set\s+for\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+          const resTimeMatch = finalTranscript.match(reservationTimePattern);
+          if (resTimeMatch) {
+            const hour = resTimeMatch[1];
+            const minute = resTimeMatch[2] || '00';
+            const period = resTimeMatch[3]?.toLowerCase();
+            extractedRequestedTime = `${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+          }
+        }
+        
+        // Pattern 3: "7:30 PM" or "7:30PM" (standalone time)
+        if (!extractedRequestedTime) {
+          const timePattern = /(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+          const timeMatch = finalTranscript.match(timePattern);
+          if (timeMatch) {
+            const hour = timeMatch[1];
+            const minute = timeMatch[2] || '00';
+            const period = timeMatch[3]?.toLowerCase();
+            extractedRequestedTime = `${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+          }
+        }
+        
+        // Pattern 4: "tomorrow at X" or "today at X"
+        if (!extractedRequestedTime) {
+          const relativePattern = /(tomorrow|today)\s+(?:at\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+          const relativeMatch = finalTranscript.match(relativePattern);
+          if (relativeMatch) {
+            const when = relativeMatch[1].toLowerCase();
+            const hour = relativeMatch[2];
+            const minute = relativeMatch[3] || '00';
+            const period = relativeMatch[4]?.toLowerCase();
+            extractedRequestedTime = `${when} at ${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+          }
+        }
+        
+        // Extract customer name from transcript
+        // Look for patterns like "User's name is John Smith" or "name is John"
+        let extractedCustomerName: string | undefined = undefined;
+        const namePatterns = [
+          /(?:user'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+          /(?:customer'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+          /(?:caller'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+        ];
+        
+        for (const pattern of namePatterns) {
+          const nameMatch = finalTranscript.match(pattern);
+          if (nameMatch) {
+            extractedCustomerName = nameMatch[1];
+            break;
+          }
+        }
+        
         // Create basic orderData from transcript
         orderData = {
           intent: isReservation ? 'reservation' : (isOrder ? 'order' : 'info'),
           order_type: isReservation ? 'reservation' : (isOrder ? 'pickup' : undefined),
           customer_phone: finalCallerNumber || null,
+          customer_name: extractedCustomerName || undefined,
+          requested_time: extractedRequestedTime || undefined,
         };
         
-        console.log('[Vapi Webhook] Extracted from transcript - intent:', orderData.intent, 'order_type:', orderData.order_type);
+        console.log('[Vapi Webhook] Extracted from transcript:', {
+          intent: orderData.intent,
+          order_type: orderData.order_type,
+          customer_name: orderData.customer_name,
+          requested_time: orderData.requested_time,
+        });
+      } else if (finalStructuredData && finalTranscript) {
+        // Even if we have structured data, try to fill in missing fields from transcript
+        // This handles cases where Vapi extracted some data but missed requested_time or customer_name
+        
+        if (!orderData.requested_time) {
+          // Try to extract requested_time from transcript
+          const dateTimePattern1 = /(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\s+(?:at\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+          const match1 = finalTranscript.match(dateTimePattern1);
+          if (match1) {
+            const month = match1[1];
+            const day = match1[2];
+            const hour = match1[3];
+            const minute = match1[4] || '00';
+            const period = match1[5]?.toLowerCase();
+            orderData.requested_time = `${month} ${day} at ${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+            console.log('[Vapi Webhook] Extracted requested_time from transcript:', orderData.requested_time);
+          } else {
+            const reservationTimePattern = /(?:reservation\s+)?time\s+(?:is\s+)?(?:set\s+for\s+)?(\d{1,2}):?(\d{2})?\s*(am|pm)/i;
+            const resTimeMatch = finalTranscript.match(reservationTimePattern);
+            if (resTimeMatch) {
+              const hour = resTimeMatch[1];
+              const minute = resTimeMatch[2] || '00';
+              const period = resTimeMatch[3]?.toLowerCase();
+              orderData.requested_time = `${hour}:${minute} ${period?.toUpperCase() || 'PM'}`;
+              console.log('[Vapi Webhook] Extracted requested_time from transcript:', orderData.requested_time);
+            }
+          }
+        }
+        
+        if (!orderData.customer_name) {
+          // Try to extract customer name from transcript
+          const namePatterns = [
+            /(?:user'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+            /(?:customer'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+            /(?:caller'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+          ];
+          
+          for (const pattern of namePatterns) {
+            const nameMatch = finalTranscript.match(pattern);
+            if (nameMatch) {
+              orderData.customer_name = nameMatch[1];
+              console.log('[Vapi Webhook] Extracted customer_name from transcript:', orderData.customer_name);
+              break;
+            }
+          }
+        }
       }
       
       // Ensure we have customer phone from structured data or caller number
@@ -775,6 +898,43 @@ export async function POST(req: NextRequest) {
       console.log('[Vapi Webhook] Order type:', orderData.order_type || 'null');
       console.log('[Vapi Webhook] Is reservation:', (orderData.intent === 'reservation' || orderData.order_type === 'reservation'));
 
+      // CRITICAL: Check for duplicate orders before creating
+      // Prevent duplicate entries for the same call
+      if (conversation_id) {
+        const { data: existingOrderData, error: checkError } = await supabase
+          .from('orders')
+          .select('id, status, created_at')
+          .eq('vapi_conversation_id', conversation_id)
+          .eq('restaurant_id', restaurantId)
+          .maybeSingle();
+        
+        if (existingOrderData) {
+          const existingOrder = existingOrderData as any;
+          console.log('[Vapi Webhook] ⚠️ Order already exists for conversation_id:', conversation_id, 'Order ID:', existingOrder.id);
+          console.log('[Vapi Webhook] Existing order status:', existingOrder.status, 'Created:', existingOrder.created_at);
+          
+          // Return success but don't create duplicate
+          return NextResponse.json({ 
+            ok: true, 
+            message: 'Order already exists',
+            orderId: existingOrder.id,
+            duplicate: true
+          }, {
+            status: 200,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            },
+          });
+        }
+        
+        if (checkError && checkError.code !== 'PGRST116') {
+          // PGRST116 is "not found" which is expected if no order exists
+          console.error('[Vapi Webhook] Error checking for existing order:', checkError);
+        }
+      }
+      
       // CRITICAL: Always create order/reservation record, even if some data is missing
       // This ensures calls are never lost
       const orderRecord = {
@@ -802,10 +962,13 @@ export async function POST(req: NextRequest) {
       
       console.log('[Vapi Webhook] Creating order/reservation with data:', {
         restaurant_id: restaurantId,
+        conversation_id: conversation_id,
         intent: orderRecord.intent,
         order_type: orderRecord.order_type,
         has_customer_name: !!orderRecord.customer_name,
+        customer_name: orderRecord.customer_name,
         has_customer_phone: !!orderRecord.customer_phone,
+        requested_time: orderRecord.requested_time,
         has_transcript: !!orderRecord.transcript_text,
         transcript_length: orderRecord.transcript_text?.length || 0,
       });
@@ -818,8 +981,48 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (orderError || !newOrder) {
+        // Check if it's a duplicate key error (unique constraint violation)
+        if (orderError?.code === '23505' || orderError?.message?.includes('duplicate') || orderError?.message?.includes('unique')) {
+          console.log('[Vapi Webhook] ⚠️ Duplicate order detected (database constraint), fetching existing order...');
+          
+          // Try to fetch the existing order
+          if (conversation_id) {
+            const { data: existingOrderData } = await supabase
+              .from('orders')
+              .select('id')
+              .eq('vapi_conversation_id', conversation_id)
+              .eq('restaurant_id', restaurantId)
+              .maybeSingle();
+            
+            if (existingOrderData) {
+              const existingOrder = existingOrderData as any;
+              console.log('[Vapi Webhook] Found existing order:', existingOrder.id);
+              return NextResponse.json({ 
+                ok: true, 
+                message: 'Order already exists (duplicate prevented)',
+                orderId: existingOrder.id,
+                duplicate: true
+              }, {
+                status: 200,
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type',
+                },
+              });
+            }
+          }
+        }
+        
         console.error('[Vapi Webhook] Error creating order:', orderError);
-        return NextResponse.json({ ok: true, warning: 'Failed to create order' });
+        return NextResponse.json({ ok: true, warning: 'Failed to create order' }, {
+          status: 200,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        });
       }
 
       const order = newOrder as any;
