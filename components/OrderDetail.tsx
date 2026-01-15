@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Order } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Copy, Trash2 } from 'lucide-react';
+import { Copy, Trash2 } from 'lucide-react';
 import KitchenTicket from './KitchenTicket';
+import AudioPlayer from '@/components/AudioPlayer';
 
 interface OrderDetailProps {
   order: Order;
@@ -14,41 +15,7 @@ interface OrderDetailProps {
 
 export default function OrderDetail({ order, restaurantName }: OrderDetailProps) {
   const router = useRouter();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [status, setStatus] = useState<Order['status']>(order.status);
-
-  useEffect(() => {
-    return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = '';
-      }
-    };
-  }, [audio]);
-
-  const handlePlayPause = () => {
-    if (!order.audio_url) {
-      alert('No recording available');
-      return;
-    }
-
-    if (!audio) {
-      const newAudio = new Audio(order.audio_url);
-      newAudio.addEventListener('ended', () => setIsPlaying(false));
-      setAudio(newAudio);
-      newAudio.play();
-      setIsPlaying(true);
-    } else {
-      if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
-      } else {
-        audio.play();
-        setIsPlaying(true);
-      }
-    }
-  };
 
   const handleStatusUpdate = async (newStatus: Order['status']) => {
     try {
@@ -147,31 +114,7 @@ export default function OrderDetail({ order, restaurantName }: OrderDetailProps)
 
         {/* Call Playback */}
         {order.audio_url && (
-          <div className="bg-white rounded-2xl shadow-sm p-6" style={{ border: '1px solid #DEB887' }}>
-            <h2 className="text-lg font-semibold mb-4" style={{ color: '#654321' }}>
-              Call Recording
-            </h2>
-            <button
-              onClick={handlePlayPause}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer"
-              style={{
-                backgroundColor: '#8B4513',
-                color: '#FFFFFF',
-              }}
-            >
-              {isPlaying ? (
-                <>
-                  <Pause className="h-4 w-4" />
-                  Pause
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  Play Recording
-                </>
-              )}
-            </button>
-          </div>
+          <AudioPlayer audioUrl={order.audio_url} title="Call Recording" />
         )}
 
         {/* Transcript */}

@@ -3,6 +3,7 @@
 import { Call, IntakeData, SummaryData } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import AudioPlayer from '@/components/AudioPlayer';
 
 interface CallDetailProps {
   call: Call;
@@ -287,31 +288,7 @@ export default function CallDetail({ call }: CallDetailProps) {
 
       {/* Recording */}
       {call.recording_url && (
-        <div 
-          className="bg-white rounded-xl shadow-sm p-8"
-          style={{
-            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-          }}
-        >
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-1" style={{ color: '#A0522D' }}>
-              Recording
-            </h2>
-          </div>
-          <Button 
-            asChild
-            className="h-12 px-6 rounded-lg font-semibold cursor-pointer"
-            style={{ backgroundColor: '#654321', color: '#FFFFFF' }}
-          >
-          <a
-            href={call.recording_url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Listen to Recording
-          </a>
-          </Button>
-        </div>
+        <AudioPlayer audioUrl={call.recording_url} title="Call Recording" />
       )}
 
       {/* Error Message */}

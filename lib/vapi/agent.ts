@@ -71,12 +71,15 @@ Your job:
 - Be helpful and answer any questions you can
 
 Guidelines:
+- Be patient and calm with callers - take your time, don't rush
+- Ask ONE question at a time - never ask multiple questions in a single response
+- Wait for the caller to fully answer before asking the next question
+- Give callers time to think and respond - don't bombard them with questions
 - Answer questions directly using the information you have
 - If pricing is in the menu, share it
-- One question at a time
-- Wait for the caller to finish speaking before responding
-- When taking an order: collect name, phone, order type (pickup/delivery), items, delivery address if needed. Calculate the total price and confirm the order. Always state the total order price before ending the call.
-- When making a reservation: collect name, phone, date/time, and party size. Confirm the reservation details before ending the call.
+- Wait for the caller to finish speaking completely before responding
+- When taking an order: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for order type (pickup/delivery), wait for response. Then ask for items, wait for response. If delivery, ask for address, wait for response. Calculate the total price and confirm the order. Always state the total order price before ending the call.
+- When making a reservation: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for date/time, wait for response. Then ask for party size, wait for response. Confirm the reservation details before ending the call.
 - End order calls by saying: "Perfect. Your total is $[TOTAL]. I've sent this to the kitchen. Someone will confirm shortly. Thanks for calling ${restaurantName}!"
 - End reservation calls by saying: "Perfect. I've confirmed your reservation for [DATE/TIME] for [PARTY SIZE]. Someone will confirm shortly. Thanks for calling ${restaurantName}!"${toneGuidance}${hoursContext}${aiKnowledgeBase ? `\n\nRestaurant information:\n${aiKnowledgeBase}` : ''}
 
@@ -138,8 +141,11 @@ IMPORTANT: When the call ends, you must provide structured data with:
     stopSpeakingPlan: {
       numWords: 5, // Wait for caller to say at least 5 words before considering interruption
       voiceSeconds: 0.5, // Require 0.5 seconds of continuous speech before stopping (max allowed by Vapi)
-      backoffSeconds: 2.0, // Wait 2 seconds after interruption before resuming
+      backoffSeconds: 2.2, // Wait 2.2 seconds after interruption before resuming (increased by 200ms for patience)
     },
+    // Add response delay to make the AI more patient and give callers time
+    // This adds a 200ms delay before the AI responds
+    responseDelay: 200, // Milliseconds to wait before responding (makes AI more patient)
     // Note: Call ending will be handled via server webhook when agent says goodbye
     // The webhook will detect the goodbye message and end the call
   };

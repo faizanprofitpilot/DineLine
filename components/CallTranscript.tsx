@@ -2,9 +2,10 @@
 
 import { Call, IntakeData, SummaryData } from '@/types';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ChevronDown, ChevronUp, Play } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import AudioPlayer from '@/components/AudioPlayer';
 
 interface CallTranscriptProps {
   call: Call;
@@ -231,24 +232,7 @@ export default function CallTranscript({ call }: CallTranscriptProps) {
 
         {/* Call Recording */}
         {call.recording_url && (
-          <div className="bg-white rounded-xl shadow-sm p-6" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold" style={{ color: '#654321' }}>
-                Call Recording
-              </h2>
-              <Button
-                className="h-9 px-4 rounded-lg font-semibold text-sm flex items-center gap-2"
-                style={{ backgroundColor: '#654321', color: '#FFFFFF' }}
-                onClick={() => window.open(call.recording_url || '', '_blank')}
-              >
-                <Play className="w-4 h-4" />
-                Listen to Recording
-              </Button>
-            </div>
-            <p className="text-sm" style={{ color: '#A0522D' }}>
-              Click the button above to listen to the full call recording in a new tab.
-            </p>
-          </div>
+          <AudioPlayer audioUrl={call.recording_url} title="Call Recording" />
         )}
 
         {/* Full Transcript (Collapsible, Default Closed) */}

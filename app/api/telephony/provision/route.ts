@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
           restaurantId: firmId,
         },
         stopSpeakingPlan: agentConfig.stopSpeakingPlan,
+        responseDelay: (agentConfig as any).responseDelay,
       };
 
       try {
