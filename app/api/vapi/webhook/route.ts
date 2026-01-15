@@ -715,12 +715,27 @@ export async function POST(req: NextRequest) {
           aiSummary = summary.summary_bullets?.join(' ') || summary.title || '';
         } else {
           // Create basic summary from order data
-          aiSummary = `Order for ${orderData.customer_name || 'customer'}: ${items.length} item(s), ${orderData.order_type || 'pickup'}`;
+          const intent = orderData.intent || 'order';
+          if (intent === 'reservation') {
+            aiSummary = `Reservation for ${orderData.customer_name || 'customer'}: ${orderData.requested_time || 'time TBD'}`;
+          } else {
+            aiSummary = `${intent === 'order' ? 'Order' : 'Request'} for ${orderData.customer_name || 'customer'}: ${items.length} item(s), ${orderData.order_type || 'pickup'}`;
+          }
         }
       } catch (error) {
         console.error('[Vapi Webhook] Summarization error:', error);
-        aiSummary = `Order received: ${orderData.customer_name || 'customer'}, ${orderData.order_type || 'pickup'}`;
+        const intent = orderData.intent || 'order';
+        if (intent === 'reservation') {
+          aiSummary = `Reservation received: ${orderData.customer_name || 'customer'}, ${orderData.requested_time || 'time TBD'}`;
+        } else {
+          aiSummary = `${intent === 'order' ? 'Order' : 'Request'} received: ${orderData.customer_name || 'customer'}, ${orderData.order_type || 'pickup'}`;
+        }
       }
+      
+      // Log intent and order type for debugging
+      console.log('[Vapi Webhook] Intent:', orderData.intent || 'order');
+      console.log('[Vapi Webhook] Order type:', orderData.order_type || 'null');
+      console.log('[Vapi Webhook] Is reservation:', (orderData.intent === 'reservation' || orderData.order_type === 'reservation'));
 
       // Create order record
       const orderRecord = {
