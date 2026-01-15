@@ -451,16 +451,13 @@ export async function POST(req: NextRequest) {
       conversation_id = body.message.call?.id || conversation_id;
     }
 
+    // CRITICAL: Don't return early if conversation_id is missing - we might still be able to process
+    // Some webhook events might not have conversation_id but still have useful data
     if (!conversation_id) {
-      console.error('[Vapi Webhook] No conversation_id found in webhook');
-      return NextResponse.json({ ok: true, warning: 'No conversation_id' }, { 
-        status: 200,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        },
-      });
+      console.warn('[Vapi Webhook] ⚠️ No conversation_id found in webhook, but continuing to process...');
+      console.warn('[Vapi Webhook] Event:', event);
+      console.warn('[Vapi Webhook] Message type:', body.message?.type);
+      // Don't return early - continue processing if we have other data
     }
 
     // For DineLine, we only create orders when the call completes
@@ -488,8 +485,13 @@ export async function POST(req: NextRequest) {
       let finalRecordingUrl = recordingUrl;
       let finalEndedAt: string | undefined = body.message?.call?.endedAt || body.message?.endedAt || undefined;
       
-      if (!finalTranscript || !finalStructuredData || !finalCallerNumber) {
-        console.log('[Vapi Webhook] Missing data, fetching from Vapi API...');
+      // CRITICAL: Always create order/reservation even if structured data is missing
+      // The AI might have taken the reservation but Vapi didn't extract structured data
+      // We should still create the order from the transcript
+      const shouldFetchData = !finalTranscript || !finalCallerNumber;
+      
+      if (shouldFetchData) {
+        console.log('[Vapi Webhook] Missing critical data, fetching from Vapi API...');
         console.log('[Vapi Webhook] Missing transcript:', !finalTranscript);
         console.log('[Vapi Webhook] Missing structured data:', !finalStructuredData);
         console.log('[Vapi Webhook] Missing caller number:', !finalCallerNumber);
@@ -671,12 +673,48 @@ export async function POST(req: NextRequest) {
       
       // Map structured data to OrderData format
       // Vapi structured data should match OrderData interface
-      const orderData: OrderData = finalStructuredData || {};
+      let orderData: OrderData = finalStructuredData || {};
+      
+      // CRITICAL FIX: If structured data is missing but we have a transcript, try to extract basic info
+      // This handles cases where Vapi didn't extract structured data but the AI took the order/reservation
+      if (!finalStructuredData && finalTranscript) {
+        console.log('[Vapi Webhook] ⚠️ No structured data found, attempting to extract from transcript...');
+        
+        // Try to detect if it's a reservation or order from transcript
+        const transcriptLower = finalTranscript.toLowerCase();
+        const isReservation = transcriptLower.includes('reservation') || 
+                             transcriptLower.includes('reserve') ||
+                             transcriptLower.includes('book a table') ||
+                             transcriptLower.includes('table for');
+        
+        const isOrder = transcriptLower.includes('order') || 
+                       transcriptLower.includes('pickup') ||
+                       transcriptLower.includes('delivery') ||
+                       transcriptLower.includes('i want') ||
+                       transcriptLower.includes('i\'d like');
+        
+        // Create basic orderData from transcript
+        orderData = {
+          intent: isReservation ? 'reservation' : (isOrder ? 'order' : 'info'),
+          order_type: isReservation ? 'reservation' : (isOrder ? 'pickup' : null),
+          customer_phone: finalCallerNumber || null,
+        };
+        
+        console.log('[Vapi Webhook] Extracted from transcript - intent:', orderData.intent, 'order_type:', orderData.order_type);
+      }
       
       // Ensure we have customer phone from structured data or caller number
       if (!orderData.customer_phone && finalCallerNumber) {
         orderData.customer_phone = finalCallerNumber;
       }
+      
+      // CRITICAL: If we still don't have critical data, log but continue anyway
+      if (!orderData.customer_phone) {
+        console.warn('[Vapi Webhook] ⚠️ WARNING: No customer phone number found! Caller number:', finalCallerNumber);
+      }
+      
+      // Always create order/reservation even if some data is missing
+      // The transcript contains the information we need
       
       // Extract items if they're in a string format
       let items: OrderItem[] = [];
@@ -737,19 +775,20 @@ export async function POST(req: NextRequest) {
       console.log('[Vapi Webhook] Order type:', orderData.order_type || 'null');
       console.log('[Vapi Webhook] Is reservation:', (orderData.intent === 'reservation' || orderData.order_type === 'reservation'));
 
-      // Create order record
+      // CRITICAL: Always create order/reservation record, even if some data is missing
+      // This ensures calls are never lost
       const orderRecord = {
         restaurant_id: restaurantId,
         status: 'new' as const,
         intent: orderData.intent || 'order',
         order_type: orderData.order_type || null,
         customer_name: orderData.customer_name || null,
-        customer_phone: orderData.customer_phone || null,
+        customer_phone: orderData.customer_phone || finalCallerNumber || null,
         delivery_address: orderData.delivery_address || null,
         requested_time: orderData.requested_time || null,
         items: items.length > 0 ? items : null,
         special_instructions: orderData.special_instructions || null,
-        ai_summary: aiSummary,
+        ai_summary: aiSummary || 'Call completed - review transcript for details',
         transcript_text: finalTranscript || null,
         audio_url: finalRecordingUrl || null,
         raw_payload: orderData,
@@ -760,6 +799,16 @@ export async function POST(req: NextRequest) {
         started_at: body.message?.call?.startedAt || new Date().toISOString(),
         ended_at: finalEndedAt || new Date().toISOString(),
       };
+      
+      console.log('[Vapi Webhook] Creating order/reservation with data:', {
+        restaurant_id: restaurantId,
+        intent: orderRecord.intent,
+        order_type: orderRecord.order_type,
+        has_customer_name: !!orderRecord.customer_name,
+        has_customer_phone: !!orderRecord.customer_phone,
+        has_transcript: !!orderRecord.transcript_text,
+        transcript_length: orderRecord.transcript_text?.length || 0,
+      });
 
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
