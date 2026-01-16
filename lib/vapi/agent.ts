@@ -12,7 +12,8 @@ export function buildVapiAgent(
   hoursClose?: string,
   timezone?: string,
   afterHoursTakeOrders?: boolean,
-  reservationsEnabled?: boolean
+  reservationsEnabled?: boolean,
+  customInstructions?: string | null
 ) {
   const DEFAULT_GREETING = "Thank you for calling {RESTAURANT_NAME}. I'm an automated assistant. I can help you place an order for pickup or delivery, make a reservation, or answer questions about our menu and hours. How can I help you today?";
   const OLD_DEFAULT_GREETING = "Thank you for calling {RESTAURANT_NAME}. I'm an automated assistant. How can I help you today?";
@@ -81,7 +82,7 @@ Guidelines:
 - When taking an order: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for order type (pickup/delivery), wait for response. Then ask for items, wait for response. If delivery, ask for address, wait for response. Calculate the total price and confirm the order. Always state the total order price before ending the call.
 - When making a reservation: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for date/time, wait for response. Then ask for party size, wait for response. Confirm the reservation details before ending the call.
 - End order calls by saying: "Perfect. Your total is $[TOTAL]. I've sent this to the kitchen. Someone will confirm shortly. Thanks for calling ${restaurantName}!"
-- End reservation calls by saying: "Perfect. I've confirmed your reservation for [DATE/TIME] for [PARTY SIZE]. Someone will confirm shortly. Thanks for calling ${restaurantName}!"${toneGuidance}${hoursContext}${aiKnowledgeBase ? `\n\nRestaurant information:\n${aiKnowledgeBase}` : ''}
+- End reservation calls by saying: "Perfect. I've confirmed your reservation for [DATE/TIME] for [PARTY SIZE]. Someone will confirm shortly. Thanks for calling ${restaurantName}!"${toneGuidance}${hoursContext}${aiKnowledgeBase ? `\n\nRestaurant information:\n${aiKnowledgeBase}` : ''}${customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : ''}
 
 IMPORTANT: When the call ends, you must provide structured data with:
 - intent: "order" for orders, "reservation" for reservations, "info" for questions

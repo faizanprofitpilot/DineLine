@@ -77,7 +77,8 @@ export async function POST(req: NextRequest) {
       restaurant.hours_close,
       restaurant.timezone,
       restaurant.after_hours_take_orders,
-      restaurant.reservations_enabled
+      restaurant.reservations_enabled,
+      restaurant.ai_custom_instructions
     );
 
     // Log greeting being applied
