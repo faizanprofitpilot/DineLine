@@ -19,6 +19,7 @@ export default function AIReceptionistSettings({ restaurant, onSave }: AIRecepti
   const [supabase, setSupabase] = useState<ReturnType<typeof createBrowserClient> | null>(null);
   const [customGreeting, setCustomGreeting] = useState('');
   const [useCustomGreeting, setUseCustomGreeting] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -30,6 +31,7 @@ export default function AIReceptionistSettings({ restaurant, onSave }: AIRecepti
     if (restaurant) {
       setCustomGreeting(restaurant.ai_greeting_custom || '');
       setUseCustomGreeting(!!restaurant.ai_greeting_custom);
+      setCustomInstructions((restaurant as any).ai_custom_instructions || '');
     }
   }, [restaurant]);
 
@@ -49,6 +51,7 @@ export default function AIReceptionistSettings({ restaurant, onSave }: AIRecepti
 
       const updateData: any = {
         ai_greeting_custom: useCustomGreeting && customGreeting.trim() ? customGreeting.trim() : null,
+        ai_custom_instructions: customInstructions.trim() || null,
       };
 
       const { error: updateError } = await supabase
@@ -178,6 +181,30 @@ export default function AIReceptionistSettings({ restaurant, onSave }: AIRecepti
         )}
       </div>
 
+      <div>
+        <h3 className="text-lg font-semibold mb-4" style={{ color: '#8B4513' }}>
+          Custom Instructions
+        </h3>
+        <p className="text-sm mb-4" style={{ color: '#A0522D' }}>
+          Add any bespoke instructions to customize the AI receptionist behavior. These will be added to the system prompt. Examples: "Always mention our daily specials", "Offer a 10% discount for first-time customers", "Ask about dietary restrictions before taking orders".
+        </p>
+        <textarea
+          value={customInstructions}
+          onChange={(e) => setCustomInstructions(e.target.value)}
+          placeholder="Enter custom instructions for the AI receptionist..."
+          rows={6}
+          className="w-full px-3 py-2 rounded-lg border text-sm resize-none focus:outline-none focus:ring-2 focus:ring-offset-0 transition-all"
+          style={{
+            borderColor: '#DEB887',
+            backgroundColor: '#FFFDF7',
+            color: customInstructions ? '#654321' : '#A0522D',
+            '--tw-ring-color': '#FF8C42',
+          } as React.CSSProperties}
+        />
+        <p className="text-xs mt-2" style={{ color: '#A0522D', opacity: 0.7 }}>
+          These instructions will modify how the AI receptionist behaves during calls.
+        </p>
+      </div>
 
       {error && (
         <div className="p-3 rounded-lg bg-red-50 border border-red-200">

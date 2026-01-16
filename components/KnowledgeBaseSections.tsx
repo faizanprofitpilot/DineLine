@@ -13,7 +13,6 @@ interface SectionState {
   dietary: string;
   location: string;
   policies: string;
-  customInstructions: string;
 }
 
 export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeBaseSectionsProps) {
@@ -22,14 +21,12 @@ export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeB
     dietary: '',
     location: '',
     policies: '',
-    customInstructions: '',
   });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     cuisine: true,
     dietary: false,
     location: false,
     policies: false,
-    customInstructions: false,
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -97,7 +94,6 @@ export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeB
         dietary: cleanContent(dietaryMatch?.[1]),
         location: cleanContent(locationMatch?.[1]),
         policies: cleanContent(policiesMatch?.[1]),
-        customInstructions: restaurant?.ai_custom_instructions || '',
       });
 
       // If no sections found, try to infer from plain text (optional - can skip)
@@ -109,10 +105,9 @@ export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeB
         dietary: '',
         location: '',
         policies: '',
-        customInstructions: restaurant?.ai_custom_instructions || '',
       });
     }
-  }, [restaurant?.ai_knowledge_base, restaurant?.ai_custom_instructions]);
+  }, [restaurant?.ai_knowledge_base]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -143,10 +138,7 @@ export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeB
       const { error } = await supabase
         .from('restaurants')
         // @ts-ignore - Supabase type inference issue
-        .update({ 
-          ai_knowledge_base: combinedContent,
-          ai_custom_instructions: sections.customInstructions.trim() || null,
-        })
+        .update({ ai_knowledge_base: combinedContent })
         .eq('id', restaurant.id);
 
       if (error) {
@@ -277,12 +269,6 @@ export default function KnowledgeBaseSections({ restaurant, onSave }: KnowledgeB
       title: 'Policies',
       placeholder: 'Reservation policies, delivery radius, cancellation policy, special requests...',
       icon: '📋',
-    },
-    {
-      key: 'customInstructions' as const,
-      title: 'Custom Instructions',
-      placeholder: 'Add any bespoke instructions to customize the AI receptionist behavior. These will be added to the system prompt. Examples: "Always mention our daily specials", "Offer a 10% discount for first-time customers", "Ask about dietary restrictions before taking orders"...',
-      icon: '⚙️',
     },
   ];
 
