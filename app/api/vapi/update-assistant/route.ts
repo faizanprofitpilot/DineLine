@@ -84,8 +84,6 @@ export async function POST(req: NextRequest) {
     // Log greeting being applied
     console.log('[Update Assistant] Custom greeting from DB:', restaurant.ai_greeting_custom);
     console.log('[Update Assistant] First message being set:', agentConfig.firstMessage);
-    console.log('[Update Assistant] Restaurant tone setting:', restaurant.ai_tone);
-    console.log('[Update Assistant] System prompt includes tone:', agentConfig.model.messages[0]?.content?.includes('Communication style:') || false);
     console.log('[Update Assistant] Knowledge base length:', restaurant.ai_knowledge_base?.length || 0);
     console.log('[Update Assistant] Knowledge base preview:', restaurant.ai_knowledge_base?.substring(0, 200) || 'None');
     console.log('[Update Assistant] System prompt includes knowledge base:', agentConfig.model.messages[0]?.content?.includes('Restaurant context:') || false);

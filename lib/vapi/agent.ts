@@ -6,7 +6,7 @@ import { isRestaurantOpen, formatHours } from '@/lib/utils/hours';
 export function buildVapiAgent(
   restaurantName: string, 
   customGreeting?: string | null, 
-  aiTone?: string, 
+  aiTone?: string, // Deprecated - kept for backwards compatibility but not used
   aiKnowledgeBase?: string | null,
   hoursOpen?: string,
   hoursClose?: string,
@@ -33,18 +33,6 @@ export function buildVapiAgent(
   const greeting = effectiveCustomGreeting 
     ? effectiveCustomGreeting.replace(/{RESTAURANT_NAME}/g, restaurantName).replace(/{FIRM_NAME}/g, restaurantName)
     : DEFAULT_GREETING.replace(/{RESTAURANT_NAME}/g, restaurantName);
-
-  // Map tone to communication style instructions
-  const toneInstructions: Record<string, string> = {
-    professional: 'Maintain a calm, clear, and businesslike tone. Be direct and efficient.',
-    warm: 'Use a friendly and empathetic tone. Show genuine care and understanding.',
-    friendly: 'Be conversational and approachable. Use a relaxed, personable style.',
-    formal: 'Use a reserved and respectful tone. Maintain professional distance while being courteous.',
-  };
-
-  const toneGuidance = aiTone && toneInstructions[aiTone] 
-    ? `\n\nCommunication style: ${toneInstructions[aiTone]}`
-    : '';
 
   // Build hours context if provided
   let hoursContext = '';
@@ -82,7 +70,7 @@ Guidelines:
 - When taking an order: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for order type (pickup/delivery), wait for response. Then ask for items, wait for response. If delivery, ask for address, wait for response. Calculate the total price and confirm the order. Always state the total order price before ending the call.
 - When making a reservation: collect information one piece at a time. First ask for name, wait for response. Then ask for phone, wait for response. Then ask for date/time, wait for response. Then ask for party size, wait for response. Confirm the reservation details before ending the call.
 - End order calls by saying: "Perfect. Your total is $[TOTAL]. I've sent this to the kitchen. Someone will confirm shortly. Thanks for calling ${restaurantName}!"
-- End reservation calls by saying: "Perfect. I've confirmed your reservation for [DATE/TIME] for [PARTY SIZE]. Someone will confirm shortly. Thanks for calling ${restaurantName}!"${toneGuidance}${hoursContext}${aiKnowledgeBase ? `\n\nRestaurant information:\n${aiKnowledgeBase}` : ''}${customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : ''}
+- End reservation calls by saying: "Perfect. I've confirmed your reservation for [DATE/TIME] for [PARTY SIZE]. Someone will confirm shortly. Thanks for calling ${restaurantName}!"${hoursContext}${aiKnowledgeBase ? `\n\nRestaurant information:\n${aiKnowledgeBase}` : ''}${customInstructions ? `\n\nCustom Instructions:\n${customInstructions}` : ''}
 
 IMPORTANT: When the call ends, you must provide structured data with:
 - intent: "order" for orders, "reservation" for reservations, "info" for questions
@@ -110,10 +98,6 @@ IMPORTANT: When the call ends, you must provide structured data with:
     }
   ] : undefined;
 
-  // Log tone configuration for debugging
-  if (aiTone) {
-    console.log(`[buildVapiAgent] Tone: ${aiTone}, Guidance: ${toneInstructions[aiTone] || 'none'}`);
-  }
 
   const agentConfig: any = {
     model: {
