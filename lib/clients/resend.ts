@@ -308,54 +308,69 @@ export async function sendKitchenTicket(
     console.log('[Resend] No items found, attempting to extract from AI summary...');
     const summary = order.ai_summary;
     
-    // Pattern: "order includes: 1 margarita pizza and 2 soups of the day"
-    const includesPattern = /order\s+includes?[:\s]+(.+?)(?:\.|$|\.\s+)/i;
-    const includesMatch = summary.match(includesPattern);
+    // Pattern 1: "Items ordered: Hot wings and wedge salad"
+    const itemsOrderedPattern = /items?\s+ordered[:\s]+(.+?)(?:\s+total|$|\.)/i;
+    const itemsOrderedMatch = summary.match(itemsOrderedPattern);
     
-    if (includesMatch && includesMatch[1]) {
-      const itemsText = includesMatch[1];
-      // Pattern: "1 X and 2 Y"
-      const itemPattern = /(\d+)\s+([^and]+?)(?:\s+and\s+(\d+)\s+([^and]+?))*(?:\s|$|\.)/gi;
-      const itemMatches = [...itemsText.matchAll(itemPattern)];
+    if (itemsOrderedMatch && itemsOrderedMatch[1]) {
+      const itemsText = itemsOrderedMatch[1].trim();
+      // Split by "and" or ","
+      const itemList = itemsText.split(/\s+and\s+|\s*,\s*/).map(s => s.trim()).filter(s => s.length > 0 && !s.includes('$'));
       
-      for (const match of itemMatches) {
-        if (match[1] && match[2]) {
-          let itemName = match[2].trim();
-          itemName = itemName.replace(/[.,;:!?]+$/, '');
-          if (itemName.length > 2) {
-            sourceItems.push({ qty: parseInt(match[1], 10), name: itemName });
-          }
+      for (const itemText of itemList) {
+        // Check if it has a quantity prefix
+        const qtyMatch = itemText.match(/^(\d+)\s+(.+)$/);
+        if (qtyMatch) {
+          sourceItems.push({ qty: parseInt(qtyMatch[1], 10), name: qtyMatch[2].trim() });
+        } else {
+          sourceItems.push({ qty: 1, name: itemText.replace(/[.,;:!?]+$/, '') });
         }
-        if (match[3] && match[4]) {
-          let itemName = match[4].trim();
-          itemName = itemName.replace(/[.,;:!?]+$/, '');
-          if (itemName.length > 2) {
-            sourceItems.push({ qty: parseInt(match[3], 10), name: itemName });
+      }
+    }
+    
+    // Pattern 2: "order includes: 1 margarita pizza and 2 soups of the day"
+    if (sourceItems.length === 0) {
+      const includesPattern = /order\s+includes?[:\s]+(.+?)(?:\s+total|$|\.)/i;
+      const includesMatch = summary.match(includesPattern);
+      
+      if (includesMatch && includesMatch[1]) {
+        const itemsText = includesMatch[1].trim();
+        // Skip if it contains dollar signs (prices)
+        if (!itemsText.includes('$')) {
+          // Split by "and" or ","
+          const itemList = itemsText.split(/\s+and\s+|\s*,\s*/).map(s => s.trim()).filter(s => s.length > 0);
+          
+          for (const itemText of itemList) {
+            // Check if it has a quantity prefix
+            const qtyMatch = itemText.match(/^(\d+)\s+(.+)$/);
+            if (qtyMatch) {
+              sourceItems.push({ qty: parseInt(qtyMatch[1], 10), name: qtyMatch[2].trim() });
+            } else {
+              sourceItems.push({ qty: 1, name: itemText.replace(/[.,;:!?]+$/, '') });
+            }
           }
         }
       }
     }
     
-    // If still no items, try direct pattern: "1 X and 2 Y" anywhere in summary
+    // Pattern 3: Look for "X and Y" patterns (without quantities) that aren't prices
     if (sourceItems.length === 0) {
-      const directPattern = /(\d+)\s+([a-z\s]+?)\s+and\s+(\d+)\s+([a-z\s]+?)(?:\s|$|\.)/i;
-      const directMatch = summary.match(directPattern);
+      const simpleItemsPattern = /items?[:\s]+([^$]+?)(?:\s+total|$|\.)/i;
+      const simpleItemsMatch = summary.match(simpleItemsPattern);
       
-      if (directMatch) {
-        if (directMatch[1] && directMatch[2]) {
-          let itemName = directMatch[2].trim();
-          itemName = itemName.replace(/[.,;:!?]+$/, '');
-          // Skip if it's a common non-item word
-          if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
-            sourceItems.push({ qty: parseInt(directMatch[1], 10), name: itemName });
-          }
-        }
-        if (directMatch[3] && directMatch[4]) {
-          let itemName = directMatch[4].trim();
-          itemName = itemName.replace(/[.,;:!?]+$/, '');
-          if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
-            sourceItems.push({ qty: parseInt(directMatch[3], 10), name: itemName });
-          }
+      if (simpleItemsMatch && simpleItemsMatch[1]) {
+        const itemsText = simpleItemsMatch[1].trim();
+        // Split by "and" or ","
+        const itemList = itemsText.split(/\s+and\s+|\s*,\s*/).map(s => s.trim()).filter(s => {
+          // Skip price-related words and dollar amounts
+          return s.length > 2 && 
+                 !s.includes('$') && 
+                 !s.match(/^\d+(\.\d+)?\s*(dollars?|cents?|usd|\$)/i) &&
+                 !s.match(/^(total|cost|price|amount)$/i);
+        });
+        
+        for (const itemText of itemList) {
+          sourceItems.push({ qty: 1, name: itemText.replace(/[.,;:!?]+$/, '') });
         }
       }
     }
