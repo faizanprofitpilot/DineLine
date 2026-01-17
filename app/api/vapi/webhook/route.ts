@@ -676,12 +676,18 @@ export async function POST(req: NextRequest) {
       let orderData: OrderData = finalStructuredData || {};
       
       // CRITICAL: Normalize intent and order_type to ensure consistency
-      // If intent is 'reservation', order_type must be 'reservation'
-      // If intent is 'order' and order_type is missing, default to 'pickup'
-      if (orderData.intent === 'reservation') {
+      // PRIORITIZE order_type over intent - if order_type is pickup/delivery, it's an order
+      // If order_type is 'pickup' or 'delivery', intent must be 'order'
+      if (orderData.order_type === 'pickup' || orderData.order_type === 'delivery') {
+        orderData.intent = 'order';
+      } else if (orderData.order_type === 'reservation') {
+        orderData.intent = 'reservation';
+      } else if (orderData.intent === 'reservation') {
+        // If intent is reservation but order_type not set, set it
         orderData.order_type = 'reservation';
       } else if (orderData.intent === 'order' && !orderData.order_type) {
-        orderData.order_type = 'pickup'; // Default to pickup if not specified
+        // If intent is order but order_type missing, default to pickup
+        orderData.order_type = 'pickup';
       }
       
       console.log('[Vapi Webhook] Normalized orderData:', {
