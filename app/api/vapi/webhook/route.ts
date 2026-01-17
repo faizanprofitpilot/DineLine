@@ -867,6 +867,69 @@ export async function POST(req: NextRequest) {
         }
       }
       
+      // If items are missing, try to extract from transcript or structured data
+      if (items.length === 0 && finalTranscript) {
+        console.log('[Vapi Webhook] No items in structured data, attempting to extract from transcript...');
+        
+        // Pattern: "1 margarita pizza and 2 soups of the day" or "order includes: 1 X and 2 Y"
+        // First, look for "order includes:" pattern
+        const includesPattern = /order\s+includes?[:\s]+(.+?)(?:\.|$|\.\s+)/i;
+        const includesMatch = finalTranscript.match(includesPattern);
+        
+        if (includesMatch && includesMatch[1]) {
+          const itemsText = includesMatch[1];
+          // Pattern: "1 X and 2 Y"
+          const itemPattern = /(\d+)\s+([^and]+?)(?:\s+and\s+(\d+)\s+([^and]+?))*(?:\s|$|\.)/gi;
+          const itemMatches = [...itemsText.matchAll(itemPattern)];
+          
+          for (const match of itemMatches) {
+            if (match[1] && match[2]) {
+              let itemName = match[2].trim();
+              itemName = itemName.replace(/[.,;:!?]+$/, '');
+              if (itemName.length > 2) {
+                items.push({ qty: parseInt(match[1], 10), name: itemName });
+              }
+            }
+            if (match[3] && match[4]) {
+              let itemName = match[4].trim();
+              itemName = itemName.replace(/[.,;:!?]+$/, '');
+              if (itemName.length > 2) {
+                items.push({ qty: parseInt(match[3], 10), name: itemName });
+              }
+            }
+          }
+        }
+        
+        // If still no items, try direct pattern: "1 X and 2 Y" anywhere in transcript
+        if (items.length === 0) {
+          const directPattern = /(\d+)\s+([a-z\s]+?)\s+and\s+(\d+)\s+([a-z\s]+?)(?:\s|$|\.)/i;
+          const directMatch = finalTranscript.match(directPattern);
+          
+          if (directMatch) {
+            if (directMatch[1] && directMatch[2]) {
+              let itemName = directMatch[2].trim();
+              itemName = itemName.replace(/[.,;:!?]+$/, '');
+              // Skip if it's a common non-item word
+              if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+                items.push({ qty: parseInt(directMatch[1], 10), name: itemName });
+              }
+            }
+            if (directMatch[3] && directMatch[4]) {
+              let itemName = directMatch[4].trim();
+              itemName = itemName.replace(/[.,;:!?]+$/, '');
+              if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+                items.push({ qty: parseInt(directMatch[3], 10), name: itemName });
+              }
+            }
+          }
+        }
+        
+        if (items.length > 0) {
+          console.log('[Vapi Webhook] ✅ Extracted items from transcript:', items);
+          orderData.items = items;
+        }
+      }
+      
       // Get restaurant to check subscription and get kitchen emails
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
@@ -888,6 +951,68 @@ export async function POST(req: NextRequest) {
           // @ts-ignore - generateSummary expects IntakeData but OrderData is compatible
           const summary = await generateSummary(finalTranscript, orderData);
           aiSummary = summary.summary_bullets?.join(' ') || summary.title || '';
+          
+          // If items are still missing, try to extract from AI summary
+          if (items.length === 0 && aiSummary) {
+            console.log('[Vapi Webhook] No items found, attempting to extract from AI summary...');
+            
+            // Pattern: "order includes: 1 margarita pizza and 2 soups of the day"
+            const includesPattern = /order\s+includes?[:\s]+(.+?)(?:\.|$|\.\s+)/i;
+            const includesMatch = aiSummary.match(includesPattern);
+            
+            if (includesMatch && includesMatch[1]) {
+              const itemsText = includesMatch[1];
+              // Pattern: "1 X and 2 Y"
+              const itemPattern = /(\d+)\s+([^and]+?)(?:\s+and\s+(\d+)\s+([^and]+?))*(?:\s|$|\.)/gi;
+              const itemMatches = [...itemsText.matchAll(itemPattern)];
+              
+              for (const match of itemMatches) {
+                if (match[1] && match[2]) {
+                  let itemName = match[2].trim();
+                  itemName = itemName.replace(/[.,;:!?]+$/, '');
+                  if (itemName.length > 2) {
+                    items.push({ qty: parseInt(match[1], 10), name: itemName });
+                  }
+                }
+                if (match[3] && match[4]) {
+                  let itemName = match[4].trim();
+                  itemName = itemName.replace(/[.,;:!?]+$/, '');
+                  if (itemName.length > 2) {
+                    items.push({ qty: parseInt(match[3], 10), name: itemName });
+                  }
+                }
+              }
+            }
+            
+            // If still no items, try direct pattern: "1 X and 2 Y" anywhere in summary
+            if (items.length === 0) {
+              const directPattern = /(\d+)\s+([a-z\s]+?)\s+and\s+(\d+)\s+([a-z\s]+?)(?:\s|$|\.)/i;
+              const directMatch = aiSummary.match(directPattern);
+              
+              if (directMatch) {
+                if (directMatch[1] && directMatch[2]) {
+                  let itemName = directMatch[2].trim();
+                  itemName = itemName.replace(/[.,;:!?]+$/, '');
+                  // Skip if it's a common non-item word
+                  if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+                    items.push({ qty: parseInt(directMatch[1], 10), name: itemName });
+                  }
+                }
+                if (directMatch[3] && directMatch[4]) {
+                  let itemName = directMatch[4].trim();
+                  itemName = itemName.replace(/[.,;:!?]+$/, '');
+                  if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+                    items.push({ qty: parseInt(directMatch[3], 10), name: itemName });
+                  }
+                }
+              }
+            }
+            
+            if (items.length > 0) {
+              console.log('[Vapi Webhook] ✅ Extracted items from AI summary:', items);
+              orderData.items = items;
+            }
+          }
         } else {
           // Create basic summary from order data
           const intent = orderData.intent || 'order';

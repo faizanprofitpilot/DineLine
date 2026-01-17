@@ -299,9 +299,71 @@ export async function sendKitchenTicket(
   };
 
   // Format items list (text + HTML)
-  const sourceItems = (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0)
+  let sourceItems = (orderData.items && Array.isArray(orderData.items) && orderData.items.length > 0)
     ? orderData.items
     : (order.items && Array.isArray(order.items) ? order.items : []);
+  
+  // If items are still missing, try to extract from AI summary
+  if (sourceItems.length === 0 && order.ai_summary) {
+    console.log('[Resend] No items found, attempting to extract from AI summary...');
+    const summary = order.ai_summary;
+    
+    // Pattern: "order includes: 1 margarita pizza and 2 soups of the day"
+    const includesPattern = /order\s+includes?[:\s]+(.+?)(?:\.|$|\.\s+)/i;
+    const includesMatch = summary.match(includesPattern);
+    
+    if (includesMatch && includesMatch[1]) {
+      const itemsText = includesMatch[1];
+      // Pattern: "1 X and 2 Y"
+      const itemPattern = /(\d+)\s+([^and]+?)(?:\s+and\s+(\d+)\s+([^and]+?))*(?:\s|$|\.)/gi;
+      const itemMatches = [...itemsText.matchAll(itemPattern)];
+      
+      for (const match of itemMatches) {
+        if (match[1] && match[2]) {
+          let itemName = match[2].trim();
+          itemName = itemName.replace(/[.,;:!?]+$/, '');
+          if (itemName.length > 2) {
+            sourceItems.push({ qty: parseInt(match[1], 10), name: itemName });
+          }
+        }
+        if (match[3] && match[4]) {
+          let itemName = match[4].trim();
+          itemName = itemName.replace(/[.,;:!?]+$/, '');
+          if (itemName.length > 2) {
+            sourceItems.push({ qty: parseInt(match[3], 10), name: itemName });
+          }
+        }
+      }
+    }
+    
+    // If still no items, try direct pattern: "1 X and 2 Y" anywhere in summary
+    if (sourceItems.length === 0) {
+      const directPattern = /(\d+)\s+([a-z\s]+?)\s+and\s+(\d+)\s+([a-z\s]+?)(?:\s|$|\.)/i;
+      const directMatch = summary.match(directPattern);
+      
+      if (directMatch) {
+        if (directMatch[1] && directMatch[2]) {
+          let itemName = directMatch[2].trim();
+          itemName = itemName.replace(/[.,;:!?]+$/, '');
+          // Skip if it's a common non-item word
+          if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+            sourceItems.push({ qty: parseInt(directMatch[1], 10), name: itemName });
+          }
+        }
+        if (directMatch[3] && directMatch[4]) {
+          let itemName = directMatch[4].trim();
+          itemName = itemName.replace(/[.,;:!?]+$/, '');
+          if (itemName.length > 2 && !itemName.match(/^(order|includes|contains|has|items?|dishes?|food)$/i)) {
+            sourceItems.push({ qty: parseInt(directMatch[3], 10), name: itemName });
+          }
+        }
+      }
+    }
+    
+    if (sourceItems.length > 0) {
+      console.log('[Resend] ✅ Extracted items from AI summary:', sourceItems);
+    }
+  }
 
   const itemsText = sourceItems.length > 0
     ? sourceItems.map((item: OrderItem) => {
