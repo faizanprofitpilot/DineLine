@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/clients/supabase';
 import { vapi } from '@/lib/clients/vapi';
-import { generateSummary } from '@/lib/utils/summarize';
 import { sendKitchenTicket } from '@/lib/clients/resend';
 import { OrderData, OrderItem } from '@/types';
+import { generateOrderSummary } from '@/lib/utils/generate-order-summary';
 import { isRestaurantOpen, formatHours } from '@/lib/utils/hours';
 
 // Ensure this route is public (no authentication required)
@@ -1042,13 +1042,26 @@ export async function POST(req: NextRequest) {
 
       const restaurant = restaurantData as any;
 
-      // Generate AI summary from transcript
+      // Generate AI summary AND extract customer name/items in ONE efficient LLM call
       let aiSummary = '';
       try {
         if (finalTranscript) {
-          // @ts-ignore - generateSummary expects IntakeData but OrderData is compatible
-          const summary = await generateSummary(finalTranscript, orderData);
-          aiSummary = summary.summary_bullets?.join(' ') || summary.title || '';
+          // ONE LLM call that does summary + extraction
+          const summaryResult = await generateOrderSummary(finalTranscript, orderData);
+          aiSummary = summaryResult.summary;
+          
+          // Update customer name if extracted and not already set
+          if (summaryResult.customer_name && !orderData.customer_name) {
+            orderData.customer_name = summaryResult.customer_name;
+            console.log('[Vapi Webhook] ✅ Extracted customer name from LLM:', summaryResult.customer_name);
+          }
+          
+          // Update items if extracted and not already set
+          if (summaryResult.items && summaryResult.items.length > 0 && items.length === 0) {
+            items = summaryResult.items;
+            orderData.items = items;
+            console.log('[Vapi Webhook] ✅ Extracted items from LLM:', items);
+          }
           
           // CRITICAL: Re-check AI summary for reservation keywords
           // Sometimes the AI summary is clearer than structured data or transcript
@@ -1069,7 +1082,7 @@ export async function POST(req: NextRequest) {
             }
           }
           
-          // If items are still missing, try to extract from AI summary
+          // Legacy fallback: If items are still missing, try regex extraction from AI summary
           if (items.length === 0 && aiSummary) {
             console.log('[Vapi Webhook] No items found, attempting to extract from AI summary...');
             

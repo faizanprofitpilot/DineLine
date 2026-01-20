@@ -16,7 +16,7 @@ export function getOrderItems(order: Order): OrderItem[] {
     return rawPayload.items;
   }
   
-  // If items are still missing, try to extract from AI summary
+  // If items are still missing, try to extract from AI summary (regex fallback - OpenAI extraction happens in webhook)
   if (order.ai_summary) {
     const extractedItems = extractItemsFromSummary(order.ai_summary);
     if (extractedItems.length > 0) {
