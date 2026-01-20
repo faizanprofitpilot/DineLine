@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Order, OrderStatus, OrderIntent, OrderType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { getCustomerName } from '@/lib/utils/extract-customer-info';
+import { getOrderItems } from '@/lib/utils/extract-items';
 
 interface OrdersListProps {
   orders: Order[];
@@ -193,7 +194,7 @@ export default function OrdersList({ orders, searchParams }: OrdersListProps) {
             </thead>
             <tbody>
               {orders.map((order) => {
-                const items = order.items || (order.raw_payload as any)?.items || [];
+                const items = getOrderItems(order);
                 return (
                   <tr
                     key={order.id}

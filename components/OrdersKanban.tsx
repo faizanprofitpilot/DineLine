@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Order } from '@/types';
 import { Clock, MapPin, Package } from 'lucide-react';
 import { getCustomerName } from '@/lib/utils/extract-customer-info';
+import { getOrderItems } from '@/lib/utils/extract-items';
 
 interface OrdersKanbanProps {
   orders: Order[];
@@ -127,14 +128,15 @@ export default function OrdersKanban({ orders }: OrdersKanbanProps) {
   };
 
   const getOrderItemsPreview = (order: Order) => {
-    if (!order.items || !Array.isArray(order.items) || order.items.length === 0) {
+    const items = getOrderItems(order);
+    if (items.length === 0) {
       return 'No items';
     }
-    const items = order.items.slice(0, 2);
-    return items.map(item => {
+    const previewItems = items.slice(0, 2);
+    return previewItems.map(item => {
       if (typeof item === 'string') return item;
       return item.qty ? `${item.qty}x ${item.name}` : item.name;
-    }).join(', ') + (order.items.length > 2 ? ` +${order.items.length - 2} more` : '');
+    }).join(', ') + (items.length > 2 ? ` +${items.length - 2} more` : '');
   };
 
   const renderOrderCard = (order: Order) => {

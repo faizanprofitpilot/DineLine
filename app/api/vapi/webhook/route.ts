@@ -965,6 +965,35 @@ export async function POST(req: NextRequest) {
           }
         }
         
+        // Pattern 3: "Ordered 2 orders of hot wings" or "Ordered 2 hot wings"
+        if (items.length === 0) {
+          // Match "Ordered X orders of Y" or "Ordered X Y" or "Ordered Y"
+          const orderedPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+for\s+|\s+total|$|\.)/i;
+          const orderedMatch = finalTranscript.match(orderedPattern);
+          
+          if (orderedMatch && orderedMatch[1] && orderedMatch[2]) {
+            const qty = parseInt(orderedMatch[1], 10);
+            const itemName = orderedMatch[2].trim();
+            // Skip if it contains dollar signs or is a delivery address
+            if (!itemName.includes('$') && !itemName.toLowerCase().includes('delivery') && !itemName.toLowerCase().includes('address')) {
+              items.push({ qty, name: itemName.replace(/[.,;:!?]+$/, '') });
+            }
+          }
+          
+          // Also try to match multiple items: "Ordered 2 orders of hot wings and 1 pizza"
+          if (items.length > 0) {
+            const moreItemsPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+and\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?))(?:\s+for\s+|\s+total|$|\.)/i;
+            const moreItemsMatch = finalTranscript.match(moreItemsPattern);
+            if (moreItemsMatch && moreItemsMatch[3] && moreItemsMatch[4]) {
+              const qty2 = parseInt(moreItemsMatch[3], 10);
+              const itemName2 = moreItemsMatch[4].trim();
+              if (!itemName2.includes('$') && !itemName2.toLowerCase().includes('delivery')) {
+                items.push({ qty: qty2, name: itemName2.replace(/[.,;:!?]+$/, '') });
+              }
+            }
+          }
+        }
+        
         if (items.length > 0) {
           console.log('[Vapi Webhook] ✅ Extracted items from transcript:', items);
           orderData.items = items;
@@ -1042,6 +1071,35 @@ export async function POST(req: NextRequest) {
               }
             }
             
+            // Pattern 3: "Ordered 2 orders of hot wings" or "Ordered 2 hot wings"
+            if (items.length === 0) {
+              // Match "Ordered X orders of Y" or "Ordered X Y" or "Ordered Y"
+              const orderedPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+for\s+|\s+total|$|\.)/i;
+              const orderedMatch = aiSummary.match(orderedPattern);
+              
+              if (orderedMatch && orderedMatch[1] && orderedMatch[2]) {
+                const qty = parseInt(orderedMatch[1], 10);
+                const itemName = orderedMatch[2].trim();
+                // Skip if it contains dollar signs or is a delivery address
+                if (!itemName.includes('$') && !itemName.toLowerCase().includes('delivery') && !itemName.toLowerCase().includes('address')) {
+                  items.push({ qty, name: itemName.replace(/[.,;:!?]+$/, '') });
+                }
+              }
+              
+              // Also try to match multiple items: "Ordered 2 orders of hot wings and 1 pizza"
+              if (items.length > 0) {
+                const moreItemsPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+and\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?))(?:\s+for\s+|\s+total|$|\.)/i;
+                const moreItemsMatch = aiSummary.match(moreItemsPattern);
+                if (moreItemsMatch && moreItemsMatch[3] && moreItemsMatch[4]) {
+                  const qty2 = parseInt(moreItemsMatch[3], 10);
+                  const itemName2 = moreItemsMatch[4].trim();
+                  if (!itemName2.includes('$') && !itemName2.toLowerCase().includes('delivery')) {
+                    items.push({ qty: qty2, name: itemName2.replace(/[.,;:!?]+$/, '') });
+                  }
+                }
+              }
+            }
+            
             // Pattern 3: Look for "X and Y" patterns (without quantities) that aren't prices
             if (items.length === 0) {
               const simpleItemsPattern = /items?[:\s]+([^$]+?)(?:\s+total|$|\.)/i;
@@ -1068,6 +1126,15 @@ export async function POST(req: NextRequest) {
               console.log('[Vapi Webhook] ✅ Extracted items from AI summary:', items);
               orderData.items = items;
             }
+          }
+          
+          // CRITICAL: Update items array if we extracted from AI summary
+          // This ensures items are saved to the database
+          if (items.length > 0 && orderData.items) {
+            // Items already set above
+          } else if (items.length > 0) {
+            // Make sure items are in orderData for saving
+            orderData.items = items;
           }
         } else {
           // Create basic summary from order data

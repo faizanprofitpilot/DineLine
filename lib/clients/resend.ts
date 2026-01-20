@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { SummaryData, IntakeData, UrgencyLevel, Order, OrderData, OrderItem } from '@/types';
+import { getCustomerName } from '@/lib/utils/extract-customer-info';
 
 const apiKey = process.env.RESEND_API_KEY;
 
@@ -356,7 +357,36 @@ export async function sendKitchenTicket(
       }
     }
     
-    // Pattern 3: Look for "X and Y" patterns (without quantities) that aren't prices
+    // Pattern 3: "Ordered 2 orders of hot wings" or "Ordered 2 hot wings"
+    if (sourceItems.length === 0) {
+      // Match "Ordered X orders of Y" or "Ordered X Y" or "Ordered Y"
+      const orderedPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+for\s+|\s+total|$|\.)/i;
+      const orderedMatch = summary.match(orderedPattern);
+      
+      if (orderedMatch && orderedMatch[1] && orderedMatch[2]) {
+        const qty = parseInt(orderedMatch[1], 10);
+        const itemName = orderedMatch[2].trim();
+        // Skip if it contains dollar signs or is a delivery address
+        if (!itemName.includes('$') && !itemName.toLowerCase().includes('delivery') && !itemName.toLowerCase().includes('address')) {
+          sourceItems.push({ qty, name: itemName.replace(/[.,;:!?]+$/, '') });
+        }
+      }
+      
+      // Also try to match multiple items: "Ordered 2 orders of hot wings and 1 pizza"
+      if (sourceItems.length > 0) {
+        const moreItemsPattern = /ordered\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?)(?:\s+and\s+(\d+)\s+(?:orders?\s+of\s+)?(.+?))(?:\s+for\s+|\s+total|$|\.)/i;
+        const moreItemsMatch = summary.match(moreItemsPattern);
+        if (moreItemsMatch && moreItemsMatch[3] && moreItemsMatch[4]) {
+          const qty2 = parseInt(moreItemsMatch[3], 10);
+          const itemName2 = moreItemsMatch[4].trim();
+          if (!itemName2.includes('$') && !itemName2.toLowerCase().includes('delivery')) {
+            sourceItems.push({ qty: qty2, name: itemName2.replace(/[.,;:!?]+$/, '') });
+          }
+        }
+      }
+    }
+    
+    // Pattern 4: Look for "X and Y" patterns (without quantities) that aren't prices
     if (sourceItems.length === 0) {
       const simpleItemsPattern = /items?[:\s]+([^$]+?)(?:\s+total|$|\.)/i;
       const simpleItemsMatch = summary.match(simpleItemsPattern);
@@ -475,7 +505,7 @@ export async function sendKitchenTicket(
                     <div style="display:flex; flex-wrap:wrap; gap:18px;">
                       <div style="flex:1; min-width:220px;">
                         <div style="font-size:12px; color:${colors.muted}; text-transform:uppercase; letter-spacing:0.05em;">Customer</div>
-                        <div style="margin-top:6px; font-weight:700; color:${colors.text};">${order.customer_name || orderData.customer_name || 'Not provided'}</div>
+                        <div style="margin-top:6px; font-weight:700; color:${colors.text};">${getCustomerName(order)}</div>
                         <div style="margin-top:4px; color:${colors.muted}; font-size:14px;">${order.customer_phone || orderData.customer_phone || 'Not provided'}</div>
                       </div>
                       <div style="flex:1; min-width:220px;">
@@ -541,7 +571,7 @@ Order Type: ${orderType}
 Requested Time: ${requestedTime}
 
 Customer Information:
-  Name: ${order.customer_name || orderData.customer_name || 'Not provided'}
+  Name: ${getCustomerName(order)}
   Phone: ${order.customer_phone || orderData.customer_phone || 'Not provided'}
 
 ${order.order_type === 'delivery' && (order.delivery_address || orderData.delivery_address) ? `Delivery Address:

@@ -2,6 +2,7 @@
 
 import { Order } from '@/types';
 import { getCustomerName, getRequestedTime } from '@/lib/utils/extract-customer-info';
+import { getOrderItems } from '@/lib/utils/extract-items';
 import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,10 +27,11 @@ export default function KitchenTicket({ order, restaurantName }: KitchenTicketPr
   };
 
   const getItemsText = () => {
-    if (!order.items || !Array.isArray(order.items) || order.items.length === 0) {
+    const items = getOrderItems(order);
+    if (items.length === 0) {
       return 'No items specified';
     }
-    return order.items.map((item, idx) => {
+    return items.map((item) => {
       if (typeof item === 'string') {
         return `  - ${item}`;
       }
