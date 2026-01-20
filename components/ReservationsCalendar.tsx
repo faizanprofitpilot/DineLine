@@ -15,108 +15,90 @@ interface CalendarDay {
   reservations: Order[];
 }
 
-// Parse requested_time to extract date/time
-function parseReservationTime(requestedTime: string | null, createdDate: string): Date | null {
-  if (!requestedTime) return null;
-
-  const created = new Date(createdDate);
+// Parse a reservation date/time from multiple sources on the order.
+// We prefer explicit date+time; if only time is present, we anchor it to the created_at date.
+function parseReservationTime(order: Order): Date | null {
+  const created = new Date(order.created_at);
   const now = new Date();
-  
-  // Try to parse common formats
-  const lower = requestedTime.toLowerCase().trim();
-  
-  // Handle "ASAP" or "as soon as possible"
+
+  const rawPayload = (order.raw_payload && typeof order.raw_payload === 'object') ? (order.raw_payload as any) : undefined;
+  const candidates: Array<string> = [
+    order.requested_time || '',
+    rawPayload?.requested_time || '',
+    order.ai_summary || '',
+    order.transcript_text || '',
+  ].map((s) => (typeof s === 'string' ? s.trim() : '')).filter(Boolean);
+
+  if (candidates.length === 0) return null;
+
+  const text = candidates.join(' | ');
+  const lower = text.toLowerCase();
+
+  // Handle ASAP
   if (lower.includes('asap') || lower.includes('as soon')) {
     return created;
   }
-  
-  // Handle "today at X" or "today X"
+
+  // Helper: extract time (h[:mm] am/pm)
+  const timeMatch = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  const toHour24 = (h: number, period?: string) => {
+    const p = period?.toLowerCase();
+    if (p === 'pm' && h !== 12) return h + 12;
+    if (p === 'am' && h === 12) return 0;
+    return h;
+  };
+
+  const parsedTime = timeMatch
+    ? {
+        hour24: toHour24(parseInt(timeMatch[1], 10), timeMatch[3]),
+        minutes: timeMatch[2] ? parseInt(timeMatch[2], 10) : 0,
+      }
+    : null;
+
+  // Relative dates
   if (lower.includes('today')) {
-    const timeMatch = requestedTime.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?/i);
-    if (timeMatch) {
-      const hours = parseInt(timeMatch[1]);
-      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3]?.toLowerCase();
-      
-      let hour24 = hours;
-      if (period === 'pm' && hours !== 12) hour24 = hours + 12;
-      if (period === 'am' && hours === 12) hour24 = 0;
-      
-      const date = new Date(now);
-      date.setHours(hour24, minutes, 0, 0);
-      return date;
-    }
-    return created;
+    const base = new Date(now);
+    if (parsedTime) base.setHours(parsedTime.hour24, parsedTime.minutes, 0, 0);
+    return base;
   }
-  
-  // Handle "tomorrow at X"
   if (lower.includes('tomorrow')) {
-    const timeMatch = requestedTime.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?/i);
-    if (timeMatch) {
-      const hours = parseInt(timeMatch[1]);
-      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-      const period = timeMatch[3]?.toLowerCase();
-      
-      let hour24 = hours;
-      if (period === 'pm' && hours !== 12) hour24 = hours + 12;
-      if (period === 'am' && hours === 12) hour24 = 0;
-      
-      const date = new Date(now);
-      date.setDate(date.getDate() + 1);
-      date.setHours(hour24, minutes, 0, 0);
-      return date;
-    }
-    const date = new Date(now);
-    date.setDate(date.getDate() + 1);
-    return date;
+    const base = new Date(now);
+    base.setDate(base.getDate() + 1);
+    if (parsedTime) base.setHours(parsedTime.hour24, parsedTime.minutes, 0, 0);
+    return base;
   }
-  
-  // Handle specific dates like "January 15 at 7:30 PM" or "Sunday, January 18 at 7:00 PM"
-  // Pattern handles: [Weekday, ]Month Day[, Year][, | at ]Time
-  // Examples: "Sunday, January 18 at 7:00 PM" or "January 15 at 7:30 PM" or "Monday, January 15, 2026, 7:00 PM"
-  const dateMatch = requestedTime.match(/(?:(\w+),\s+)?(\w+)\s+(\d{1,2})(?:,\s+(\d{4}))?(?:,\s+|\s+at\s+)(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?/i);
-  if (dateMatch) {
-    const weekday = dateMatch[1]; // Optional weekday (e.g., "Monday")
-    const monthName = dateMatch[2]; // Month name
-    const day = parseInt(dateMatch[3]);
-    const year = dateMatch[4] ? parseInt(dateMatch[4]) : now.getFullYear();
-    const hours = dateMatch[5] ? parseInt(dateMatch[5]) : 18;
-    const minutes = dateMatch[6] ? parseInt(dateMatch[6]) : 0;
-    const period = dateMatch[7]?.toLowerCase();
-    
-    let hour24 = hours;
-    if (period === 'pm' && hours !== 12) hour24 = hours + 12;
-    if (period === 'am' && hours === 12) hour24 = 0;
-    
-    const months = ['january', 'february', 'march', 'april', 'may', 'june', 
-                    'july', 'august', 'september', 'october', 'november', 'december'];
-    const monthIndex = months.findIndex(m => m.startsWith(monthName.toLowerCase()));
-    
+
+  // Month Day [Year] (allow ordinals: 20th)
+  const monthDayMatch = text.match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,\s*(\d{4}))?/i
+  );
+  if (monthDayMatch) {
+    const monthName = monthDayMatch[1].toLowerCase();
+    const day = parseInt(monthDayMatch[2], 10);
+    const year = monthDayMatch[3] ? parseInt(monthDayMatch[3], 10) : now.getFullYear();
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const monthIndex = months.indexOf(monthName);
     if (monthIndex !== -1) {
-      const date = new Date(year, monthIndex, day, hour24, minutes);
-      // Validate the date is reasonable (allow past dates up to 1 day, and future dates up to 2 years)
-      const minDate = new Date(now);
-      minDate.setDate(minDate.getDate() - 1);
-      const maxDate = new Date(now);
-      maxDate.setFullYear(maxDate.getFullYear() + 2);
-      
-      if (date >= minDate && date <= maxDate) {
-        return date;
-      }
-      // If date is valid but outside the range, still return it (might be a test reservation)
-      // This allows test reservations to show up even if they're further in the future
-      if (!isNaN(date.getTime())) {
-        return date;
-      }
+      const d = new Date(year, monthIndex, day, 0, 0, 0, 0);
+      if (parsedTime) d.setHours(parsedTime.hour24, parsedTime.minutes, 0, 0);
+      return d;
     }
   }
-  
-  // Fallback: try to parse as ISO date or use created date
-  const parsed = new Date(requestedTime);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
+
+  // If we only have a time (e.g. "3:00 PM"), anchor it to created_at date.
+  if (parsedTime) {
+    const d = new Date(created);
+    d.setHours(parsedTime.hour24, parsedTime.minutes, 0, 0);
+    return d;
   }
-  
+
+  // Fallback: try Date() parsing on requested_time specifically
+  const primary = order.requested_time || rawPayload?.requested_time;
+  if (primary && typeof primary === 'string') {
+    const parsed = new Date(primary);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
   return created;
 }
 
@@ -144,7 +126,7 @@ export default function ReservationsCalendar({ reservations }: ReservationsCalen
     
     while (current <= endDate) {
       const dayReservations = reservations.filter(res => {
-        const resDate = parseReservationTime(res.requested_time, res.created_at);
+        const resDate = parseReservationTime(res);
         if (!resDate) return false;
         
         return resDate.getFullYear() === current.getFullYear() &&
@@ -262,7 +244,7 @@ export default function ReservationsCalendar({ reservations }: ReservationsCalen
                 {/* Reservations for this day */}
                 <div className="space-y-1">
                   {day.reservations.slice(0, 3).map(reservation => {
-                    const resTime = parseReservationTime(reservation.requested_time, reservation.created_at);
+                    const resTime = parseReservationTime(reservation);
                     const timeStr = resTime ? resTime.toLocaleTimeString('en-US', { 
                       hour: 'numeric', 
                       minute: '2-digit',
