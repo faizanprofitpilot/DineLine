@@ -21,6 +21,9 @@ export function getCustomerName(order: Order): string {
   // Try to extract from transcript
   if (order.transcript_text) {
     const transcript = order.transcript_text;
+    // Words to exclude from name extraction (order-related terms)
+    const excludedWords = ['delivery', 'pickup', 'pick-up', 'carry out', 'takeout', 'take out', 'asap', 'order', 'reservation'];
+    
     const namePatterns = [
       /(?:user'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
       /(?:customer'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
@@ -30,7 +33,12 @@ export function getCustomerName(order: Order): string {
     for (const pattern of namePatterns) {
       const nameMatch = transcript.match(pattern);
       if (nameMatch && nameMatch[1]) {
-        return nameMatch[1].trim();
+        const extractedName = nameMatch[1].trim();
+        // Exclude order-related terms
+        const nameLower = extractedName.toLowerCase();
+        if (!excludedWords.some(word => nameLower === word || nameLower.includes(word))) {
+          return extractedName;
+        }
       }
     }
   }
@@ -38,12 +46,15 @@ export function getCustomerName(order: Order): string {
   // Try to extract from AI summary
   if (order.ai_summary) {
     const summary = order.ai_summary;
+    // Words to exclude from name extraction (order-related terms)
+    const excludedWords = ['delivery', 'pickup', 'pick-up', 'carry out', 'takeout', 'take out', 'asap', 'order', 'reservation'];
+    
     const namePatterns = [
       /(?:user'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
       /(?:customer'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
       /(?:caller'?s?\s+)?name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
-      // Pattern for summaries like "Order for John Smith: ..."
-      /(?:order|reservation)\s+for\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+      // Pattern for summaries like "Order for John Smith: ..." (but not "order for delivery")
+      /(?:order|reservation)\s+for\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)(?:\s|:|$)/i,
       // Pattern for summaries like "John Smith ordered..."
       /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:ordered|requested|called)/i,
     ];
@@ -51,7 +62,12 @@ export function getCustomerName(order: Order): string {
     for (const pattern of namePatterns) {
       const nameMatch = summary.match(pattern);
       if (nameMatch && nameMatch[1]) {
-        return nameMatch[1].trim();
+        const extractedName = nameMatch[1].trim();
+        // Exclude order-related terms
+        const nameLower = extractedName.toLowerCase();
+        if (!excludedWords.some(word => nameLower === word || nameLower.includes(word))) {
+          return extractedName;
+        }
       }
     }
   }
