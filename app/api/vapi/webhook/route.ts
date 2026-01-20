@@ -675,19 +675,47 @@ export async function POST(req: NextRequest) {
       // Vapi structured data should match OrderData interface
       let orderData: OrderData = finalStructuredData || {};
       
+      // CRITICAL: Check transcript for reservation keywords BEFORE normalization
+      // This ensures reservations are detected even if structured data is wrong
+      let isReservationFromTranscript = false;
+      if (finalTranscript) {
+        const transcriptLower = finalTranscript.toLowerCase();
+        const hasReservationKeywords = transcriptLower.includes('reservation') || 
+                                      transcriptLower.includes('reserve') ||
+                                      transcriptLower.includes('book a table') ||
+                                      transcriptLower.includes('table for') ||
+                                      transcriptLower.includes('party size') ||
+                                      transcriptLower.includes('party of');
+        
+        // If transcript clearly indicates reservation and no delivery/pickup, mark it
+        if (hasReservationKeywords && !transcriptLower.includes('delivery') && !transcriptLower.includes('pickup')) {
+          console.log('[Vapi Webhook] ⚠️ Detected reservation keywords in transcript BEFORE normalization');
+          isReservationFromTranscript = true;
+        }
+      }
+      
       // CRITICAL: Normalize intent and order_type to ensure consistency
-      // PRIORITIZE order_type over intent - if order_type is pickup/delivery, it's an order
-      // If order_type is 'pickup' or 'delivery', intent must be 'order'
-      if (orderData.order_type === 'pickup' || orderData.order_type === 'delivery') {
-        orderData.intent = 'order';
-      } else if (orderData.order_type === 'reservation') {
+      // PRIORITIZE reservation detection - if it's a reservation, it's never an order
+      if (isReservationFromTranscript) {
+        // Override with reservation if transcript indicates it
         orderData.intent = 'reservation';
-      } else if (orderData.intent === 'reservation') {
-        // If intent is reservation but order_type not set, set it
         orderData.order_type = 'reservation';
-      } else if (orderData.intent === 'order' && !orderData.order_type) {
-        // If intent is order but order_type missing, default to pickup
-        orderData.order_type = 'pickup';
+        console.log('[Vapi Webhook] Overriding classification to reservation based on transcript');
+      } else if (orderData.intent === 'reservation' || orderData.order_type === 'reservation') {
+        // It's a reservation - ensure both are set correctly
+        orderData.intent = 'reservation';
+        orderData.order_type = 'reservation';
+      } else if (orderData.order_type === 'pickup' || orderData.order_type === 'delivery') {
+        // It's an order - ensure intent is set correctly
+        orderData.intent = 'order';
+      } else if (!orderData.order_type) {
+        // If order_type is missing, check intent
+        const intent = orderData.intent as string | undefined;
+        if (intent === 'reservation') {
+          orderData.order_type = 'reservation';
+        } else if (intent === 'order') {
+          orderData.order_type = 'pickup';
+        }
       }
       
       console.log('[Vapi Webhook] Normalized orderData:', {
@@ -1021,6 +1049,25 @@ export async function POST(req: NextRequest) {
           // @ts-ignore - generateSummary expects IntakeData but OrderData is compatible
           const summary = await generateSummary(finalTranscript, orderData);
           aiSummary = summary.summary_bullets?.join(' ') || summary.title || '';
+          
+          // CRITICAL: Re-check AI summary for reservation keywords
+          // Sometimes the AI summary is clearer than structured data or transcript
+          if (aiSummary) {
+            const summaryLower = aiSummary.toLowerCase();
+            const hasReservationKeywords = summaryLower.includes('reservation') || 
+                                          summaryLower.includes('reserve') ||
+                                          summaryLower.includes('book a table') ||
+                                          summaryLower.includes('table for') ||
+                                          summaryLower.includes('party size') ||
+                                          summaryLower.includes('party of');
+            
+            // If summary clearly indicates reservation and no delivery/pickup, override
+            if (hasReservationKeywords && !summaryLower.includes('delivery') && !summaryLower.includes('pickup')) {
+              console.log('[Vapi Webhook] ⚠️ Detected reservation keywords in AI summary, overriding classification');
+              orderData.intent = 'reservation';
+              orderData.order_type = 'reservation';
+            }
+          }
           
           // If items are still missing, try to extract from AI summary
           if (items.length === 0 && aiSummary) {
