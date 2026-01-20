@@ -266,8 +266,11 @@ export async function sendKitchenTicket(
   dashboardUrl?: string // Optional: link to order in dashboard
 ) {
   // CRITICAL: Determine if this is a reservation or order
-  // Check both intent and order_type - intent is the primary field
-  const isReservation = order.intent === 'reservation' || order.order_type === 'reservation';
+  // Explicitly check order_type FIRST to prevent delivery/pickup orders from being misclassified
+  // If order_type is 'delivery' or 'pickup', it's definitely an order, not a reservation
+  const isReservation = (order.order_type === 'reservation' || order.intent === 'reservation') 
+    && order.order_type !== 'delivery' 
+    && order.order_type !== 'pickup';
   
   const orderType = order.order_type === 'delivery' ? 'Delivery' : 
                     order.order_type === 'pickup' ? 'Pickup' : 

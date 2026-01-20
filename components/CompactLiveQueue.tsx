@@ -23,24 +23,6 @@ export default function CompactLiveQueue({ orders, restaurantId }: CompactLiveQu
         icon={<ShoppingCart className="h-10 w-10 mx-auto opacity-30" style={{ color: '#A0522D' }} />}
         title="No active orders"
         description="When calls come in, orders will appear here."
-        actionLabel={restaurantId ? "Create Test Order" : undefined}
-        onAction={restaurantId ? async () => {
-          try {
-            const response = await fetch('/api/test-order', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ restaurantId }),
-            });
-            if (response.ok) {
-              window.location.reload();
-            } else {
-              alert('Failed to create test order');
-            }
-          } catch (error) {
-            console.error('Error creating test order:', error);
-            alert('Failed to create test order');
-          }
-        } : undefined}
       />
     );
   }

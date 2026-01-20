@@ -8,7 +8,6 @@ import CompactLiveQueue from '@/components/CompactLiveQueue';
 import CompactKitchenFeed from '@/components/CompactKitchenFeed';
 import CompactInfoCard from '@/components/CompactInfoCard';
 import CompactPhoneRouting from '@/components/CompactPhoneRouting';
-import CompactDemoTools from '@/components/CompactDemoTools';
 
 // Force dynamic rendering since we use cookies for authentication
 export const dynamic = 'force-dynamic';
@@ -255,9 +254,6 @@ export default async function DashboardPage({
               {/* BAND 3: Setup & Tools */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <CompactPhoneRouting restaurant={restaurant as any} />
-                {restaurant && (
-                  <CompactDemoTools restaurantId={(restaurant as any).id} />
-                )}
               </div>
 
               {/* Usage Display (if subscription exists) */}

@@ -700,18 +700,40 @@ export async function POST(req: NextRequest) {
       if (!finalStructuredData && finalTranscript) {
         console.log('[Vapi Webhook] ⚠️ No structured data found, attempting to extract from transcript...');
         
-        // Try to detect if it's a reservation or order from transcript
+        // CRITICAL: Check for delivery/pickup FIRST, then reservation
+        // This prevents delivery orders from being misclassified as reservations
         const transcriptLower = finalTranscript.toLowerCase();
-        const isReservation = transcriptLower.includes('reservation') || 
-                             transcriptLower.includes('reserve') ||
-                             transcriptLower.includes('book a table') ||
-                             transcriptLower.includes('table for');
         
-        const isOrder = transcriptLower.includes('order') || 
-                       transcriptLower.includes('pickup') ||
-                       transcriptLower.includes('delivery') ||
-                       transcriptLower.includes('i want') ||
-                       transcriptLower.includes('i\'d like');
+        // Check for delivery keywords (highest priority)
+        const isDelivery = transcriptLower.includes('delivery') || 
+                          transcriptLower.includes('deliver') ||
+                          transcriptLower.includes('deliver to') ||
+                          transcriptLower.includes('delivery address');
+        
+        // Check for pickup keywords (second priority)
+        const isPickup = transcriptLower.includes('pickup') || 
+                        transcriptLower.includes('pick up') ||
+                        transcriptLower.includes('pick-up') ||
+                        transcriptLower.includes('carry out') ||
+                        transcriptLower.includes('takeout') ||
+                        transcriptLower.includes('take out');
+        
+        // Check for reservation keywords (only if not delivery/pickup)
+        const isReservation = !isDelivery && !isPickup && (
+          transcriptLower.includes('reservation') || 
+          transcriptLower.includes('reserve') ||
+          transcriptLower.includes('book a table') ||
+          transcriptLower.includes('table for') ||
+          transcriptLower.includes('dining reservation')
+        );
+        
+        // Check for general order keywords (only if not delivery/pickup/reservation)
+        const isOrder = !isDelivery && !isPickup && !isReservation && (
+          transcriptLower.includes('order') || 
+          transcriptLower.includes('i want') ||
+          transcriptLower.includes('i\'d like') ||
+          transcriptLower.includes('i need')
+        );
         
         // Extract requested_time from transcript
         // Look for patterns like "7:30 PM", "January 7th at 7:30 PM", "Reservation time is set for 7:30 PM", etc.
@@ -784,9 +806,27 @@ export async function POST(req: NextRequest) {
         }
         
         // Create basic orderData from transcript
+        // CRITICAL: Set order_type based on detection priority (delivery > pickup > reservation > order)
+        let detectedOrderType: 'delivery' | 'pickup' | 'reservation' | undefined = undefined;
+        let detectedIntent: 'order' | 'reservation' | 'info' = 'info';
+        
+        if (isDelivery) {
+          detectedOrderType = 'delivery';
+          detectedIntent = 'order';
+        } else if (isPickup) {
+          detectedOrderType = 'pickup';
+          detectedIntent = 'order';
+        } else if (isReservation) {
+          detectedOrderType = 'reservation';
+          detectedIntent = 'reservation';
+        } else if (isOrder) {
+          detectedOrderType = 'pickup'; // Default to pickup if order detected but no specific type
+          detectedIntent = 'order';
+        }
+        
         orderData = {
-          intent: isReservation ? 'reservation' : (isOrder ? 'order' : 'info'),
-          order_type: isReservation ? 'reservation' : (isOrder ? 'pickup' : undefined),
+          intent: detectedIntent,
+          order_type: detectedOrderType,
           customer_phone: finalCallerNumber || null,
           customer_name: extractedCustomerName || undefined,
           requested_time: extractedRequestedTime || undefined,
