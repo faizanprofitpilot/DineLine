@@ -104,10 +104,7 @@ export async function POST(req: NextRequest) {
       if ((agentConfig as any).stopSpeakingPlan) {
         assistantPayload.stopSpeakingPlan = (agentConfig as any).stopSpeakingPlan;
       }
-      // Add responseDelay for patience
-      if ((agentConfig as any).responseDelay !== undefined) {
-        assistantPayload.responseDelay = (agentConfig as any).responseDelay;
-      }
+      // Note: responseDelay is not supported by Vapi API - removed to avoid validation errors
       
       // Ensure metadata includes restaurantId for webhook resolution
       assistantPayload.metadata = {

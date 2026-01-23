@@ -152,9 +152,7 @@ export async function POST(req: NextRequest) {
       if (agentConfig.stopSpeakingPlan) {
         assistantPayload.stopSpeakingPlan = agentConfig.stopSpeakingPlan;
       }
-      if ((agentConfig as any).responseDelay !== undefined) {
-        assistantPayload.responseDelay = (agentConfig as any).responseDelay;
-      }
+      // Note: responseDelay is not supported by Vapi API - removed to avoid validation errors
 
       // Clean payload to remove any undefined/null values
       const cleanedPayload = cleanVapiPayload(assistantPayload);
