@@ -17,6 +17,15 @@ export const runtime = 'nodejs';
  */
 export async function POST(req: NextRequest) {
   try {
+    // Check VAPI_API_KEY is configured
+    if (!process.env.VAPI_API_KEY) {
+      console.error('[Telephony Generate] VAPI_API_KEY not configured');
+      return NextResponse.json({ 
+        error: 'Vapi API key not configured',
+        message: 'VAPI_API_KEY environment variable is missing. Please configure it in your environment variables.'
+      }, { status: 500 });
+    }
+
     const supabase = await createServerClient();
     const {
       data: { user },
@@ -102,9 +111,23 @@ export async function POST(req: NextRequest) {
 
     if (!assistantId) {
       // Create new assistant
+      // Build model object - only include tools if they exist
+      const modelPayload: any = {
+        provider: agentConfig.model.provider,
+        model: agentConfig.model.model,
+        temperature: agentConfig.model.temperature,
+        maxTokens: agentConfig.model.maxTokens,
+        messages: agentConfig.model.messages,
+      };
+      
+      // Only include tools if they exist (not undefined)
+      if (agentConfig.model.tools && Array.isArray(agentConfig.model.tools) && agentConfig.model.tools.length > 0) {
+        modelPayload.tools = agentConfig.model.tools;
+      }
+
       const assistantPayload: any = {
         name: `${restaurant.name} Receptionist`,
-        model: agentConfig.model,
+        model: modelPayload,
         voice: agentConfig.voice,
         transcriber: agentConfig.transcriber,
         firstMessage: agentConfig.firstMessage,
@@ -123,20 +146,54 @@ export async function POST(req: NextRequest) {
         metadata: {
           restaurantId: firmId,
         },
-        stopSpeakingPlan: agentConfig.stopSpeakingPlan,
-        responseDelay: (agentConfig as any).responseDelay,
       };
 
+      // Add optional fields only if they exist
+      if (agentConfig.stopSpeakingPlan) {
+        assistantPayload.stopSpeakingPlan = agentConfig.stopSpeakingPlan;
+      }
+      if ((agentConfig as any).responseDelay !== undefined) {
+        assistantPayload.responseDelay = (agentConfig as any).responseDelay;
+      }
+
+      // Clean payload to remove any undefined/null values
+      const cleanedPayload = cleanVapiPayload(assistantPayload);
+      
+      console.log('[Telephony Generate] Creating assistant with payload:', JSON.stringify(cleanedPayload, null, 2));
+
       try {
-        const assistantResponse = await vapi.post('/assistant', assistantPayload);
+        const assistantResponse = await vapi.post('/assistant', cleanedPayload);
         assistantId = assistantResponse.data.id;
         console.log('[Telephony Generate] Assistant created:', assistantId);
       } catch (vapiError: any) {
         const errorDetails = vapiError?.response?.data || vapiError?.message;
-        console.error('[Telephony Generate] Assistant creation error:', errorDetails);
+        const errorStatus = vapiError?.response?.status || 500;
+        
+        console.error('[Telephony Generate] ========== ASSISTANT CREATION ERROR ==========');
+        console.error('[Telephony Generate] Error status:', errorStatus);
+        console.error('[Telephony Generate] Error details:', JSON.stringify(errorDetails, null, 2));
+        console.error('[Telephony Generate] Request payload:', JSON.stringify(cleanedPayload, null, 2));
+        console.error('[Telephony Generate] Full error:', JSON.stringify(vapiError, null, 2));
+        
+        // Extract detailed error message
+        let errorMessage = 'Failed to create assistant';
+        if (errorDetails) {
+          if (typeof errorDetails === 'string') {
+            errorMessage = errorDetails;
+          } else if (errorDetails.message) {
+            errorMessage = Array.isArray(errorDetails.message) 
+              ? errorDetails.message.join(', ')
+              : errorDetails.message;
+          } else if (errorDetails.error) {
+            errorMessage = errorDetails.error;
+          }
+        }
+        
         return NextResponse.json({
           error: 'Failed to create assistant',
+          message: errorMessage,
           details: errorDetails,
+          status: errorStatus,
         }, { status: 500 });
       }
     } else {

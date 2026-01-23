@@ -78,9 +78,23 @@ export async function POST(req: NextRequest) {
     if (!assistantId) {
       // Create assistant
       try {
+        // Build model object - only include tools if they exist
+        const modelPayload: any = {
+          provider: agentConfig.model.provider,
+          model: agentConfig.model.model,
+          temperature: agentConfig.model.temperature,
+          maxTokens: agentConfig.model.maxTokens,
+          messages: agentConfig.model.messages,
+        };
+        
+        // Only include tools if they exist (not undefined)
+        if (agentConfig.model.tools && Array.isArray(agentConfig.model.tools) && agentConfig.model.tools.length > 0) {
+          modelPayload.tools = agentConfig.model.tools;
+        }
+
         const assistantPayload: any = {
           name: `${restaurant.name} Receptionist`,
-          model: agentConfig.model,
+          model: modelPayload,
           voice: agentConfig.voice,
           transcriber: agentConfig.transcriber,
           firstMessage: agentConfig.firstMessage,
@@ -111,14 +125,42 @@ export async function POST(req: NextRequest) {
         }
         // Note: Call ending handled via webhook when agent says goodbye
         
-        const assistantResponse = await vapi.post('/assistant', assistantPayload);
+        // Clean payload to remove any undefined/null values
+        const cleanedPayload = cleanVapiPayload(assistantPayload);
+        
+        console.log('[Link Number] Creating assistant with payload:', JSON.stringify(cleanedPayload, null, 2));
+        
+        const assistantResponse = await vapi.post('/assistant', cleanedPayload);
         assistantId = assistantResponse.data.id;
         console.log('[Link Number] Assistant created:', assistantId);
       } catch (vapiError: any) {
-        console.error('[Link Number] Assistant creation error:', vapiError?.response?.data || vapiError?.message);
+        const errorDetails = vapiError?.response?.data || vapiError?.message;
+        const errorStatus = vapiError?.response?.status || 500;
+        
+        console.error('[Link Number] ========== ASSISTANT CREATION ERROR ==========');
+        console.error('[Link Number] Error status:', errorStatus);
+        console.error('[Link Number] Error details:', JSON.stringify(errorDetails, null, 2));
+        console.error('[Link Number] Full error:', JSON.stringify(vapiError, null, 2));
+        
+        // Extract detailed error message
+        let errorMessage = 'Failed to create assistant';
+        if (errorDetails) {
+          if (typeof errorDetails === 'string') {
+            errorMessage = errorDetails;
+          } else if (errorDetails.message) {
+            errorMessage = Array.isArray(errorDetails.message) 
+              ? errorDetails.message.join(', ')
+              : errorDetails.message;
+          } else if (errorDetails.error) {
+            errorMessage = errorDetails.error;
+          }
+        }
+        
         return NextResponse.json({ 
           error: 'Failed to create assistant',
-          details: vapiError?.response?.data || vapiError?.message || 'Unknown error'
+          message: errorMessage,
+          details: errorDetails,
+          status: errorStatus,
         }, { status: 500 });
       }
     }
