@@ -27,19 +27,19 @@ export async function POST(req: NextRequest) {
     // Only starter plan can have free trial
     const isTrial = trial === true && plan === 'starter';
 
-    // Get user's firm
-    const { data: firmData, error: firmError } = await supabase
-      .from('firms')
+    // Get user's restaurant
+    const { data: restaurantData, error: restaurantError } = await supabase
+      .from('restaurants')
       .select('*')
       .eq('owner_user_id', user.id)
       .limit(1)
       .single();
 
-    if (firmError || !firmData) {
-      return NextResponse.json({ error: 'Firm not found' }, { status: 404 });
+    if (restaurantError || !restaurantData) {
+      return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const firm = firmData as any;
+    const restaurant = restaurantData as any;
 
     // Get app URL
     let appUrl = process.env.VERCEL_URL
@@ -61,24 +61,24 @@ export async function POST(req: NextRequest) {
 
     // Create or retrieve Stripe customer
     const stripe = getStripe();
-    let customerId = firm.stripe_customer_id;
+    let customerId = restaurant.stripe_customer_id;
 
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
-          firm_id: firm.id,
+          restaurant_id: restaurant.id,
           user_id: user.id,
         },
       });
       customerId = customer.id;
 
-      // Save customer ID to firm
+      // Save customer ID to restaurant
       await supabase
-        .from('firms')
+        .from('restaurants')
         // @ts-ignore - New field not in types yet
         .update({ stripe_customer_id: customerId })
-        .eq('id', firm.id);
+        .eq('id', restaurant.id);
     }
 
     // Create checkout session
@@ -93,15 +93,15 @@ export async function POST(req: NextRequest) {
       ],
       mode: 'subscription',
       success_url: `${appUrl}/dashboard?subscription=success`,
-      cancel_url: `${appUrl}/pricing?subscription=cancelled`,
+      cancel_url: `${appUrl}/billing?subscription=cancelled`,
       metadata: {
-        firm_id: firm.id,
+        restaurant_id: restaurant.id,
         user_id: user.id,
         plan: plan,
       },
       subscription_data: {
         metadata: {
-          firm_id: firm.id,
+          restaurant_id: restaurant.id,
           user_id: user.id,
           plan: plan,
         },
